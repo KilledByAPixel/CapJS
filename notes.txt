@@ -1,0 +1,16 @@
+
+code cleanup
+gif improvements
+- use fixed palette for the entire gif
+- dithering options
+improve loop buster
+multiple passes
+better ability to share
+starter code for different types of dweets
+use jsoncrush
+autocomplete
+ability to save and track a library of different creations within the app
+better mobile support
+littlejs hookup
+
+
