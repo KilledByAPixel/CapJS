@@ -1,6 +1,6 @@
 # CapJS
 
-A browser live-code editor for dweets, shaders and canvas experiments. Write code on the left, see it run on the canvas, and capture GIF or WebM output. Everything runs in the browser with no backend; creations are stored locally in IndexedDB.
+A browser live-code editor for dweets, shaders and canvas experiments. Write code on the left, see it run on the canvas, and capture GIF or WebM output. Everything runs in the browser with no backend. Creations are stored locally in IndexedDB.
 
 ## Development
 
