@@ -125,3 +125,23 @@ test('rename racing a save keeps the save head; failures do not jam the queue', 
   await lib.rename(c.id, 'after')
   expect((await lib.getCreation(c.id)).name).toBe('after')
 })
+test('runExclusive serializes with saveVersion and a rejection does not jam the queue', async () => {
+  const lib = await open()
+  const c = await lib.createCreation(base)
+  const order = []
+  const save = lib.saveVersion(c.id, { code: 'b', mode: 'dweet', runMode: 'auto', settings: c.settings, thumbnail: null })
+    .then(() => order.push('save'))
+  const ex = lib.runExclusive(async () => {
+    order.push('ex-start')
+    expect((await lib.listVersions(c.id)).length).toBe(2)
+    order.push('ex-end')
+    return 7
+  })
+  const bad = lib.runExclusive(() => { throw new Error('boom') })
+  const save2 = lib.saveVersion(c.id, { code: 'c', mode: 'dweet', runMode: 'auto', settings: c.settings, thumbnail: null })
+  expect(await ex).toBe(7)
+  await expect(bad).rejects.toThrow('boom')
+  expect((await save2).n).toBe(3)
+  await save
+  expect(order).toEqual(['save', 'ex-start', 'ex-end'])
+})

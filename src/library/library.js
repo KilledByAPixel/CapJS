@@ -14,11 +14,14 @@ export async function openLibrary({ dbName = 'capjs', now = Date.now } = {}) {
 
   // Serialize all mutations so read-modify-write cycles never interleave.
   let queue = Promise.resolve()
-  const serial = fn => (...args) => {
-    const run = queue.then(() => fn(...args))
+  // runExclusive runs fn on the same queue; a rejection never jams it. Inside fn,
+  // use lib.raw (never the queued mutators, which would deadlock).
+  const runExclusive = fn => {
+    const run = queue.then(() => fn())
     queue = run.catch(() => {})
     return run
   }
+  const serial = fn => (...args) => runExclusive(() => fn(...args))
 
   const requireRecord = async (store, key) => {
     const rec = await get(db, store, key)
@@ -155,6 +158,6 @@ export async function openLibrary({ dbName = 'capjs', now = Date.now } = {}) {
     fork: serial(fork), rename: serial(rename), setDraft, getDraft, discardDraft,
     deleteCreation: serial(deleteCreation), restoreCreation: serial(restoreCreation),
     purgeCreation: serial(purgeCreation), listTombstones,
-    getKV, setKV, raw,
+    getKV, setKV, raw, runExclusive,
   }
 }
