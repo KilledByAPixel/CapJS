@@ -10,9 +10,11 @@ import littlejsUrl from 'littlejsengine/dist/littlejs.js?url'
 const JS_BUDGET_MS = 2000
 const LITTLEJS_BUDGET_MS = 200
 const LOOP_CHECK_MASK = 1023 // check the clock every 1024 guard calls
+const GRAB_TIMEOUT_MS = 1000
 
 let mode = null
-let runtime = null, runtimeMode = null, canvas = null
+let runtime = null, canvas = null
+let pageBaseline = null // window's own properties once frame.js is set up; later ones are cleared on load
 let image = null
 let collecting = null // errors raised synchronously during a load, reported in its reply
 let pendingGrabs = [] // littlejs grab callbacks, serviced at the end of the next render
@@ -48,8 +50,19 @@ function keepDeadline(budgetMs) {
 function errorLine(event) {
   // Inline user scripts report lineno directly; errors raised inside the engine script itself have no editor line.
   if (mode === 'littlejs') return event.filename && event.filename !== location.href ? null : event.lineno
+  if (mode === 'html') return htmlLine(event.lineno)
   if (mode === 'js') return parseErrorLine(event.error?.stack, 0)
   return parseErrorLine(event.error?.stack)
+}
+
+// Chrome numbers the lines of inline scripts added by document.write() from the
+// script's own start. While a script runs it is document.currentScript, so add
+// the line its text starts on in the user's code.
+let htmlCode = ''
+function htmlLine(lineno) {
+  const script = document.currentScript
+  const at = script && !script.src ? htmlCode.indexOf(script.text) : -1
+  return at < 0 ? lineno : htmlCode.slice(0, at).split('\n').length - 1 + lineno
 }
 
 function reportError(error) {
@@ -63,25 +76,32 @@ function onWindowError(event) {
 
 // --- Modes ---
 
-async function loadCanvas(msg) {
-  if (!runtime || runtimeMode !== msg.mode) {
-    canvas?.remove()
-    canvas = document.createElement('canvas')
-    canvas.id = 'c'
-    canvas.style.cssText = 'display:block;width:100%;height:100%'
-    document.body.append(canvas)
-    runtime = createRuntime({ canvas, globalScope: window })
-    runtimeMode = msg.mode
-    if (image) await runtime.handle({ type: 'image', id: -1, bitmap: image })
+// Every load starts from scratch: no canvas, no runtime, no user globals, no pending grabs.
+function resetPage() {
+  canvas?.remove()
+  canvas = runtime = null
+  answerGrabs(null)
+  for (const k of Object.getOwnPropertyNames(window)) {
+    if (!pageBaseline.has(k)) try { delete window[k] } catch { /* non-configurable */ }
   }
+}
+
+async function loadCanvas(msg) {
+  canvas = document.createElement('canvas')
+  canvas.id = 'c'
+  canvas.style.cssText = 'display:block;width:100%;height:100%'
+  document.body.append(canvas)
+  runtime = createRuntime({ canvas, globalScope: window })
+  if (image) await runtime.handle({ type: 'image', id: -1, bitmap: image })
   return runtime.handle(msg)
 }
 
 function loadHtml(msg) {
+  htmlCode = msg.code
   document.open()
+  installListeners() // document.open erased them; reinstall before the user's scripts run
   document.write(msg.code)
   document.close()
-  installListeners() // document.open erased them
   return makeReply(msg.id)
 }
 
@@ -159,33 +179,50 @@ function startEngine() {
 }
 
 // Runs inside a LittleJS render: it has no preserveDrawingBuffer, so the WebGL
-// canvas must be copied before the frame ends.
+// canvas must be copied before the frame ends. The canvases are stacked in DOM
+// order (all absolutely positioned, no z-index), so composite them in that order,
+// copying the WebGL canvas through glCopyToContext wherever it sits.
 function serviceGrabs() {
   if (!pendingGrabs.length) return
-  const grabs = pendingGrabs
-  pendingGrabs = []
   const [main, glCanvas] = indirectEval('[mainCanvas, glCanvas]')
   const tmp = new OffscreenCanvas(main.width, main.height)
   const tmpCtx = tmp.getContext('2d')
-  window.glCopyToContext(tmpCtx)
-  const canvases = [...document.querySelectorAll('canvas')]
-  for (const cv of canvases.slice(canvases.indexOf(main))) {
-    if (cv !== glCanvas) tmpCtx.drawImage(cv, 0, 0, tmp.width, tmp.height)
+  for (const cv of document.querySelectorAll('canvas')) {
+    if (cv === glCanvas) window.glCopyToContext(tmpCtx)
+    else if (cv === main || cv.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_PRECEDING) {
+      tmpCtx.drawImage(cv, 0, 0, tmp.width, tmp.height)
+    }
   }
-  createImageBitmap(tmp).then(bitmap => {
-    grabs.forEach((done, i) => done(i ? null : bitmap))
-  })
+  const grabs = pendingGrabs
+  pendingGrabs = []
+  createImageBitmap(tmp).then(bitmap => grabs.forEach((done, i) => done(i ? null : bitmap)))
 }
 
+function answerGrabs(bitmap) {
+  const grabs = pendingGrabs
+  pendingGrabs = []
+  grabs.forEach(done => done(bitmap))
+}
+
+// Replies at the end of the next render, or with null after GRAB_TIMEOUT_MS.
 function grabLittlejs(msg) {
   if (!window.engineInit || !indirectEval('engineInitialized')) return makeReply(msg.id, { bitmap: null })
-  return new Promise(resolve => pendingGrabs.push(bitmap => resolve(makeReply(msg.id, { bitmap }))))
+  return new Promise(resolve => {
+    const done = bitmap => {
+      clearTimeout(timer)
+      pendingGrabs = pendingGrabs.filter(g => g !== done)
+      resolve(makeReply(msg.id, { bitmap }))
+    }
+    const timer = setTimeout(() => done(null), GRAB_TIMEOUT_MS)
+    pendingGrabs.push(done)
+  })
 }
 
 // --- Requests ---
 
 async function handle(msg) {
   if (msg.type === 'load') {
+    resetPage()
     mode = msg.mode
     if (CANVAS_MODES.includes(mode)) return loadCanvas(msg)
     if (mode === 'html') return loadHtml(msg)
@@ -198,7 +235,9 @@ async function handle(msg) {
     window.image = image
   }
   if (runtime && CANVAS_MODES.includes(mode)) return runtime.handle(msg)
-  if (msg.type === 'grab') return mode === 'littlejs' ? grabLittlejs(msg) : makeReply(msg.id, { bitmap: null })
+  // html, js and littlejs run on their own; frames only matter for a grab.
+  const wantsBitmap = msg.type === 'grab' || (msg.type === 'frames' && msg.grab)
+  if (wantsBitmap) return mode === 'littlejs' ? grabLittlejs(msg) : makeReply(msg.id, { bitmap: null })
   return makeReply(msg.id)
 }
 
@@ -227,4 +266,5 @@ function installListeners() {
 document.documentElement.style.height = '100%'
 document.body.style.cssText = 'margin:0;height:100%;overflow:hidden'
 installListeners()
+pageBaseline = new Set(Object.getOwnPropertyNames(window))
 post({ type: 'ready' })

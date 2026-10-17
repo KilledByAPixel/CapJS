@@ -26,30 +26,12 @@ const UNIFORMS = ['iResolution', 'iTime', 'iTimeDelta', 'iFrame', 'iFrameRate', 
 const LOOP_CHECK_MASK = 1023 // check the clock every 1024 guard calls
 
 export function createRuntime({ canvas, globalScope, now = () => performance.now() }) {
-  let log = []
-  const con = globalScope.console ?? (globalScope.console = Object.create(console))
-  con.log = (...args) => { log.push(args.join(' ')) }
-
   // Own properties present at startup; anything added later is cleared on load.
   const baseline = new Set(Object.getOwnPropertyNames(globalScope))
 
-  // When globalScope is not the real global (unit tests), user code runs inside
-  // with(sandbox) so its free variables live on globalScope, with the same
-  // semantics as real globals: new names are created by assignment, and reading
-  // an unknown name is a ReferenceError.
-  const sandbox = globalScope === globalThis ? null : new Proxy(globalScope, {
-    has: () => true,
-    get(o, k) {
-      if (k === Symbol.unscopables) return undefined
-      if (k in o) return o[k]
-      if (k in globalThis) return globalThis[k]
-      throw new ReferenceError(`${String(k)} is not defined`)
-    },
-  })
-
   let mode = null, width = 0, height = 0, loopProtect = false
   let ctx = null, renderer = null, u = null, compileError = null
-  let gl = null, program = null, texture = null, uniforms = {}
+  let gl = null, program = null, texture = null, vertexBuffer = null, uniforms = {}
   let image = null, flippedImage = null, mouse = [0, 0, 0, 0]
   let deadline = Infinity, guardCalls = 0
 
@@ -92,12 +74,7 @@ export function createRuntime({ canvas, globalScope, now = () => performance.now
     compileError = null
     const body = loopProtect ? wrapLoops(code) : code
     try {
-      if (sandbox) {
-        const f = new Function('t', '__s', 'with(__s){' + body + '\n}')
-        u = t => f(t, sandbox)
-      } else {
-        u = new Function('t', body)
-      }
+      u = new Function('t', body)
     } catch (e) {
       compileError = toError(e)
     }
@@ -127,9 +104,13 @@ export function createRuntime({ canvas, globalScope, now = () => performance.now
       const p = gl.createProgram()
       gl.attachShader(p, vs)
       gl.attachShader(p, fs)
+      gl.bindAttribLocation(p, 0, 'p')
       gl.linkProgram(p)
       if (gl.getProgramParameter(p, gl.LINK_STATUS)) program = p
-      else compileError = errorInfo('LINK ERROR!\n' + gl.getProgramInfoLog(p))
+      else {
+        compileError = errorInfo('LINK ERROR!\n' + gl.getProgramInfoLog(p))
+        gl.deleteProgram(p)
+      }
     }
     gl.deleteShader(vs)
     gl.deleteShader(fs)
@@ -137,9 +118,15 @@ export function createRuntime({ canvas, globalScope, now = () => performance.now
 
     gl.useProgram(program)
     uniforms = Object.fromEntries(UNIFORMS.map(n => [n, gl.getUniformLocation(program, n)]))
-    // One giant triangle covering the screen.
-    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer())
-    gl.bufferData(gl.ARRAY_BUFFER, new Int8Array([-3, 1, 1, -3, 1, 1]), gl.STATIC_DRAW)
+    // One giant triangle covering the screen, created once per context. The
+    // attribute state is set again in case three.js used this context before.
+    gl.bindVertexArray(null)
+    if (!vertexBuffer) {
+      vertexBuffer = gl.createBuffer()
+      gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer)
+      gl.bufferData(gl.ARRAY_BUFFER, new Int8Array([-3, 1, 1, -3, 1, 1]), gl.STATIC_DRAW)
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer)
     gl.enableVertexAttribArray(0)
     gl.vertexAttribPointer(0, 2, gl.BYTE, false, 0, 0)
     texture ??= gl.createTexture()
@@ -189,7 +176,10 @@ export function createRuntime({ canvas, globalScope, now = () => performance.now
     async load(msg) {
       clearUserGlobals()
       if (renderer) renderer.dispose()
-      renderer = ctx = u = compileError = program = null
+      if (program) gl.deleteProgram(program)
+      if (texture) gl.deleteTexture(texture)
+      renderer = ctx = u = compileError = program = texture = null
+      mouse = [0, 0, 0, 0]
       ;({ mode, width, height } = msg)
       loopProtect = !!msg.loopProtect
       deadline = Infinity
@@ -215,7 +205,6 @@ export function createRuntime({ canvas, globalScope, now = () => performance.now
       if (mode === 'shadertoy') {
         gl = canvas.getContext('webgl2', { preserveDrawingBuffer: true })
         if (!gl) throw Error('Could not create a WebGL2 context on this canvas')
-        texture = null
         flippedImage = await flipImage(image)
         ctx = gl
         installGlobals()
@@ -269,8 +258,12 @@ export function createRuntime({ canvas, globalScope, now = () => performance.now
     },
   }
 
+  // console.log is captured only while a request runs.
   async function run(msg) {
-    log = []
+    const lines = []
+    const con = globalScope.console
+    const log = con.log
+    con.log = (...args) => { lines.push(args.join(' ')) }
     let result
     try {
       const handler = handlers[msg.type]
@@ -278,8 +271,10 @@ export function createRuntime({ canvas, globalScope, now = () => performance.now
       result = await handler(msg)
     } catch (e) {
       result = { error: toError(e) }
+    } finally {
+      con.log = log
     }
-    return makeReply(msg.id, { ...result, console: log.join('\n') })
+    return makeReply(msg.id, { ...result, console: lines.join('\n') })
   }
 
   // Requests run one at a time, in arrival order.

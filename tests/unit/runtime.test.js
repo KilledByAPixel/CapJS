@@ -1,9 +1,12 @@
 // tests/unit/runtime.test.js
-import { test, expect } from 'vitest'
+import { test, expect, afterEach } from 'vitest'
 import { createRuntime } from '../../src/runner/runtime.js'
 const fakeCanvas = () => { const calls = []; const ctx = new Proxy({}, { get: (_, k) => (...a) => calls.push([k, ...a]) }); return { width: 1920, height: 1080, getContext: () => ctx, calls } }
+// The runtime runs user code on the real global scope; remove what it and the tests create.
+const RUNTIME_GLOBALS = ['c', 'x', 'S', 'C', 'T', 'R', 'PI', 'DrawImage', 'image', '__lg', 't', 'time', 'frame', 'k']
+afterEach(() => { for (const k of RUNTIME_GLOBALS) delete globalThis[k] })
 const setup = async (code, opts = {}) => {
-  const canvas = fakeCanvas(), scope = {}
+  const canvas = fakeCanvas(), scope = globalThis
   const rt = createRuntime({ canvas, globalScope: scope, now: opts.now ?? (() => 0) })
   const loaded = await rt.handle({ type: 'load', id: 1, mode: 'dweet', code, width: 1920, height: 1080, background: null, loopProtect: !!opts.loopProtect })
   return { rt, canvas, scope, loaded }
