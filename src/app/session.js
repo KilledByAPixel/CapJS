@@ -6,7 +6,8 @@
 // steps to the runner one request at a time (backpressure: no tick while busy).
 //
 // Events (session.on): 'state' {time, step, playing, error, console, supportsTime,
-// supportsCapture, safeStart}, and 'codeChanged' {code, modified}.
+// supportsCapture, safeStart}, 'codeChanged' {code, modified}, and 'renamed' {id, name}
+// once a library rename has been stored.
 //
 // `ui.showSafeStart(bool)` shows or hides the "Click to run" overlay.
 // `library` is optional; when present, drafts are written with library.setDraft.
@@ -79,16 +80,39 @@ export function createSession({ container, editor, clock, settings, library = nu
   const isModified = () => !saved || saved.code !== code || saved.mode !== work.mode
     || saved.runMode !== work.runMode || !sameSettings(saved.settings, work.settings)
 
+  const workingCopy = () => ({ code, mode: work.mode, runMode: work.runMode, settings: clone(work.settings) })
+
   // Every change to the working copy: tell the UI, and write the draft (debounced).
+  let writeDraft = null // the pending draft write, run by its timer or by flushDraft
+  let draftWrite = null // the draft write in flight
   function changed() {
     emit('codeChanged', { code, modified: isModified() })
     if (!library || !creation.id) return
     clearTimeout(draftTimer)
     const id = creation.id
-    draftTimer = setTimeout(() => {
-      library.setDraft(id, { code, mode: work.mode, runMode: work.runMode, settings: work.settings })
+    writeDraft = () => {
+      writeDraft = null
+      const write = draftWrite = library.setDraft(id, workingCopy())
         .catch(e => console.error('Could not save draft', e))
-    }, DRAFT_DEBOUNCE_MS)
+        .finally(() => { if (draftWrite === write) draftWrite = null })
+      return write
+    }
+    draftTimer = setTimeout(writeDraft, DRAFT_DEBOUNCE_MS)
+  }
+
+  function cancelDraft() {
+    clearTimeout(draftTimer)
+    writeDraft = null
+  }
+
+  // Replaces the working copy and shows it in the editor (no draft write, no run).
+  function setWorkingCopy(cur) {
+    code = cur.code
+    work = { mode: cur.mode ?? 'auto', runMode: cur.runMode ?? 'auto', settings: clone(cur.settings ?? DEFAULT_CREATION_SETTINGS) }
+    clearTimeout(changeTimer)
+    editor.setCode(code, { silent: true })
+    editor.setLanguage?.(concreteMode())
+    setError(null)
   }
 
   // --- Runner ---
@@ -217,14 +241,8 @@ export function createSession({ container, editor, clock, settings, library = nu
     open({ creation: c, version, draft = null, safeStart: safe = false }) {
       creation = { id: c.id ?? null, name: c.name ?? 'untitled' }
       saved = { code: version.code, mode: version.mode, runMode: version.runMode ?? 'auto', settings: clone(version.settings ?? DEFAULT_CREATION_SETTINGS) }
-      const cur = draft ?? saved
-      code = cur.code
-      work = { mode: cur.mode ?? 'auto', runMode: cur.runMode ?? 'auto', settings: clone(cur.settings ?? DEFAULT_CREATION_SETTINGS) }
-      clearTimeout(changeTimer)
-      clearTimeout(draftTimer)
-      editor.setCode(code, { silent: true })
-      editor.setLanguage?.(concreteMode())
-      setError(null)
+      cancelDraft()
+      setWorkingCopy(draft ?? saved)
       emit('codeChanged', { code, modified: isModified() })
       if (safe && resolvedRunMode() === 'page') {
         generation++ // drop anything still in flight for the previous creation
@@ -300,7 +318,46 @@ export function createSession({ container, editor, clock, settings, library = nu
 
     setName(name) {
       creation.name = name
-      if (library && creation.id) library.rename(creation.id, name).catch(e => console.error('Could not rename', e))
+      const id = creation.id
+      if (!library || !id) return Promise.resolve()
+      return library.rename(id, name)
+        .then(() => emit('renamed', { id, name }))
+        .catch(e => console.error('Could not rename', e))
+    },
+
+    // The working copy as a version-shaped record {code, mode, runMode, settings}.
+    get workingCopy() { return workingCopy() },
+
+    // Loads a version's code and settings as the working copy (a draft on top of
+    // the last saved version), writes the draft and runs it.
+    loadAsDraft(version) {
+      setWorkingCopy(version)
+      changed()
+      return restart()
+    },
+
+    // Writes a pending draft now instead of after the debounce; resolves once it is stored.
+    flushDraft() {
+      clearTimeout(draftTimer)
+      return writeDraft?.() ?? draftWrite ?? Promise.resolve()
+    },
+
+    // Records `version` (a working copy just stored by library.saveVersion) as saved.
+    // Edits made while saving stay modified and get their draft written again.
+    markSaved(version) {
+      saved = { code: version.code, mode: version.mode, runMode: version.runMode, settings: clone(version.settings) }
+      cancelDraft()
+      if (isModified()) changed()
+      else emit('codeChanged', { code, modified: false })
+    },
+
+    // Reverts the working copy to the last saved version and deletes the stored draft.
+    async discardDraft() {
+      cancelDraft()
+      setWorkingCopy(saved)
+      emit('codeChanged', { code, modified: false })
+      if (library && creation.id) await library.discardDraft(creation.id).catch(e => console.error('Could not discard draft', e))
+      return restart()
     },
 
     // Capture (Task 11) suspends the live loop while it drives the runner itself.

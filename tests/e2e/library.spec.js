@@ -1,0 +1,55 @@
+// tests/e2e/library.spec.js
+import { test, expect } from '@playwright/test'
+const typeCode = async (page, code) => { await page.click('#editor .cm-content'); await page.keyboard.press('Control+A'); await page.keyboard.insertText(code) }
+const code = (page) => page.evaluate(() => capjsDebug.session.code)
+test.beforeEach(async ({ page }) => { await page.goto('./'); await page.waitForFunction(() => window.capjsDebug) })
+
+test('save adds a version with a thumbnail; history can reopen v1', async ({ page }) => {
+  await typeCode(page, 'x.fillRect(0,0,99,99)')
+  await expect(page.locator('#modified-dot')).toBeVisible()
+  await page.keyboard.press('Control+S')
+  await expect(page.locator('#modified-dot')).toBeHidden()
+  await expect(page.locator('.lib-item').first()).toContainText('v2')
+  await expect(page.locator('.lib-item img').first()).toHaveAttribute('src', /^blob:/)
+  await page.click('#btn-history'); await page.locator('#history-panel [data-version-id]').last().getByText('Open').click()
+  expect(await code(page)).not.toBe('x.fillRect(0,0,99,99)')
+})
+test('fork creates a second creation; switching keeps unsaved drafts', async ({ page }) => {
+  await page.click('#btn-fork')
+  await expect(page.locator('.lib-item')).toHaveCount(2)
+  await typeCode(page, 'draftA()')
+  await page.locator('.lib-item').nth(1).click()
+  await page.locator('.lib-item').nth(0).click()
+  await expect.poll(() => code(page)).toBe('draftA()')
+})
+test('new from template, delete, restore from gallery', async ({ page }) => {
+  await page.click('#btn-new'); await page.click('[data-template="shadertoy"]')
+  await expect(page.locator('#editor')).toContainText('mainImage')
+  page.on('dialog', d => d.accept())
+  const n = await page.locator('.lib-item').count()
+  await page.locator('.lib-item').first().getByTitle('Delete').click()
+  await expect(page.locator('.lib-item')).toHaveCount(n - 1)
+  await page.click('#btn-show-all'); await page.locator('#gallery-deleted [data-restore]').first().click()
+  await expect(page.locator('.lib-item')).toHaveCount(n)
+})
+test('export then import into a fresh profile restores the library', async ({ page, browser }) => {
+  await typeCode(page, 'exported()'); await page.keyboard.press('Control+S')
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#btn-export')])
+  const ctx = await browser.newContext(); const p2 = await ctx.newPage()
+  await p2.goto('./'); await p2.waitForFunction(() => window.capjsDebug)
+  p2.on('dialog', d => d.accept())
+  await p2.setInputFiles('#import-input', await dl.path())
+  await expect(p2.locator('.lib-item')).toHaveCount(2)
+})
+test('bulk .txt import and sidebar collapse persists', async ({ page }) => {
+  await page.setInputFiles('#import-input', [{ name: 'old one.txt', mimeType: 'text/plain', buffer: Buffer.from('x.fillRect(0,0,9,9)') }])
+  await expect(page.locator('.lib-item', { hasText: 'old one' })).toBeVisible()
+  await page.click('#btn-sidebar-toggle'); await page.reload(); await page.waitForFunction(() => window.capjsDebug)
+  await expect(page.locator('#sidebar')).toHaveClass(/collapsed/)
+})
+test('library unavailable still lets you code', async ({ page }) => {
+  await page.addInitScript(() => { indexedDB.open = () => { throw new Error('blocked') } })
+  await page.goto('./'); await page.waitForFunction(() => window.capjsDebug)
+  await expect(page.locator('#library-error')).toBeVisible()
+  await expect.poll(() => page.evaluate(() => capjsDebug.sampleFrame())).toBeGreaterThan(0)
+})

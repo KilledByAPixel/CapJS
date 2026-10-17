@@ -39,8 +39,7 @@ test('pasting a compressed dweet uncompresses it; compress round-trips', async (
   await page.keyboard.press('Control+V')
   await expect.poll(() => page.evaluate(() => capjsDebug.session.code)).toBe('x.fillRect(0,0,9,9);')
 })
-// Needs draft persistence from Task 10, which removes this fixme.
-test.fixme('page-mode infinite loop saved as draft boots to safe start', async ({ page }) => {
+test('page-mode infinite loop saved as draft boots to safe start', async ({ page }) => {
   await typeCode(page, 'c.style.filter="none";for(;;){}')
   await page.waitForTimeout(800)
   await page.reload(); await page.waitForFunction(() => window.capjsDebug)

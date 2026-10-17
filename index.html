@@ -9,7 +9,9 @@
 <body>
   <div id="app">
     <header class="topbar">
+      <button id="btn-sidebar-toggle" title="Show or hide the library sidebar">☰</button>
       <b class="app-name">CapJS</b>
+      <span id="library-error" hidden title="The browser's storage (IndexedDB) could not be opened. Save downloads a text file instead.">Library unavailable — saving is disabled</span>
       <label title="Program type. Auto detects it from the code.">Mode
         <select id="mode-select" title="Program type. Auto detects it from the code.">
           <option value="auto">auto</option>
@@ -54,7 +56,25 @@
     </header>
 
     <div class="main">
-      <aside id="sidebar" hidden></aside>
+      <aside id="sidebar" hidden>
+        <div class="sidebar-inner">
+          <button id="btn-new" title="Start a new creation from a template">+ New</button>
+          <div id="template-menu" hidden></div>
+          <div id="lib-list"></div>
+          <div class="sidebar-foot">
+            <button id="btn-show-all" title="All creations: search, sort and recently deleted">Show all…</button>
+            <div class="row">
+              <button id="btn-export" title="Download the whole library as one backup file">Export</button>
+              <button id="btn-import" title="Import a backup .json, or .txt/.js/.html programs (one creation per file)">Import</button>
+            </div>
+            <input id="import-input" type="file" multiple accept=".json,.txt,.js,.html,.htm" hidden>
+            <div id="backup-nudge" hidden>
+              <span></span>
+              <button title="Download the whole library as one backup file">Export a backup</button>
+            </div>
+          </div>
+        </div>
+      </aside>
 
       <div class="left">
         <div id="canvas-host" title="Drop an image here to use it as the custom image">
@@ -111,11 +131,13 @@
         <div class="namebar">
           <input id="creation-name" type="text" spellcheck="false" title="Creation name (click to rename)">
           <span id="modified-dot" hidden title="Unsaved changes">●</span>
+          <button id="btn-discard" hidden title="Discard unsaved changes (go back to the last saved version)">Revert</button>
           <button id="btn-save" class="save" title="Save (Ctrl+S)">Save</button>
           <button id="btn-fork" title="Fork: copy this creation into a new one">Fork</button>
           <button id="btn-history" title="Saved versions of this creation">History</button>
           <button id="btn-share" class="share" title="Create a link that contains the code, to share or bookmark">Share</button>
         </div>
+        <div id="history-panel" hidden></div>
         <div id="editor"></div>
         <div id="error-bar" hidden></div>
         <div id="console-bar" hidden title="console.log output"></div>
@@ -128,6 +150,24 @@
           <button id="btn-minify" title="Remove blank lines, comment lines and indentation">Minify</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div id="gallery" hidden>
+    <div class="gallery-box">
+      <header>
+        <b>All creations</b>
+        <input id="gallery-search" type="search" placeholder="Search names" title="Filter by name">
+        <select id="gallery-sort" title="Sort order">
+          <option value="recent">recent</option>
+          <option value="name">name</option>
+        </select>
+        <span class="spacer"></span>
+        <button id="btn-gallery-close" title="Close (Esc)">✕</button>
+      </header>
+      <div id="gallery-grid"></div>
+      <h5>Recently deleted</h5>
+      <div id="gallery-deleted"></div>
     </div>
   </div>
   <script type="module" src="/src/main.js"></script>
