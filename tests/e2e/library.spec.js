@@ -65,3 +65,17 @@ test('library unavailable still lets you code', async ({ page }) => {
   await expect(page.locator('#library-error')).toBeVisible()
   await expect.poll(() => page.evaluate(() => capjsDebug.sampleFrame())).toBeGreaterThan(0)
 })
+test('blocked localStorage and IndexedDB still boot a working editor', async ({ page }) => {
+  const errors = []; page.on('pageerror', e => errors.push(e.message))
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'localStorage', { configurable: true, get() { throw new DOMException('denied', 'SecurityError') } })
+    indexedDB.open = () => { throw new DOMException('denied', 'SecurityError') }
+  })
+  await page.goto('./'); await page.waitForFunction(() => window.capjsDebug)
+  await expect(page.locator('#library-error')).toBeVisible()
+  await expect.poll(() => page.evaluate(() => capjsDebug.sampleFrame())).toBeGreaterThan(0)
+  await typeCode(page, 'x.fillRect(0,0,1920,1080)')
+  await expect.poll(() => page.evaluate(() => capjsDebug.sampleFrame())).toBeGreaterThan(0.95)
+  await page.selectOption('#theme-select', 'light') // a settings save must not throw either
+  expect(errors).toEqual([])
+})

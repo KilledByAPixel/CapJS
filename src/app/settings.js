@@ -1,4 +1,5 @@
-// App-level settings persisted in localStorage.
+// App-level settings persisted in localStorage. Storage may be blocked (a
+// SecurityError on access): then the defaults are used and nothing is persisted.
 
 export const SETTINGS_KEY = 'capjs.settings'
 
@@ -23,26 +24,34 @@ export const DEFAULT_SETTINGS = {
 const isPlainObject = v => v !== null && typeof v === 'object' && !Array.isArray(v)
 
 // Recursively merges `over` onto `base`; nested plain objects merge key by key.
+// An object default is kept when the stored value is not a plain object.
 function deepMerge(base, over) {
   const out = { ...base }
   for (const key of Object.keys(over)) {
     const v = over[key]
-    out[key] = isPlainObject(v) && isPlainObject(base[key]) ? deepMerge(base[key], v) : v
+    if (!isPlainObject(base[key])) out[key] = v
+    else if (isPlainObject(v)) out[key] = deepMerge(base[key], v)
   }
   return out
 }
 
-export function loadSettings(storage = localStorage) {
+// `storage` defaults to localStorage, looked up inside the guard: merely reading
+// window.localStorage throws when storage is blocked.
+export function loadSettings(storage) {
   const defaults = structuredClone(DEFAULT_SETTINGS)
   let stored
   try {
-    stored = JSON.parse(storage.getItem(SETTINGS_KEY))
+    stored = JSON.parse((storage ?? globalThis.localStorage).getItem(SETTINGS_KEY))
   } catch {
     return defaults
   }
   return isPlainObject(stored) ? deepMerge(defaults, stored) : defaults
 }
 
-export function saveSettings(settings, storage = localStorage) {
-  storage.setItem(SETTINGS_KEY, JSON.stringify(settings))
+export function saveSettings(settings, storage) {
+  try {
+    (storage ?? globalThis.localStorage).setItem(SETTINGS_KEY, JSON.stringify(settings))
+  } catch (e) {
+    console.warn('Could not save settings', e)
+  }
 }
