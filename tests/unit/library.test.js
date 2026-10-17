@@ -145,3 +145,18 @@ test('runExclusive serializes with saveVersion and a rejection does not jam the 
   await save
   expect(order).toEqual(['save', 'ex-start', 'ex-end'])
 })
+test('a draft for a missing creation rejects and leaves no draft behind', async () => {
+  const lib = await open()
+  await expect(lib.setDraft('missing', { code: 'x', mode: 'dweet', runMode: 'auto', settings: DEFAULT_CREATION_SETTINGS })).rejects.toThrow('not found')
+  expect(await lib.getDraft('missing')).toBeNull()
+})
+test('save keeps a draft that holds newer edits than the saved code', async () => {
+  const lib = await open()
+  const c = await lib.createCreation(base)
+  const wc = code => ({ code, mode: 'dweet', runMode: 'auto', settings: c.settings })
+  await lib.setDraft(c.id, wc('newer'))
+  await lib.saveVersion(c.id, { ...wc('older'), thumbnail: null })
+  expect((await lib.getDraft(c.id)).code).toBe('newer')
+  await lib.saveVersion(c.id, { ...wc('newer'), thumbnail: null })
+  expect(await lib.getDraft(c.id)).toBeNull()
+})

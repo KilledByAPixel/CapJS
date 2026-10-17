@@ -105,12 +105,22 @@ export function createSession({ container, editor, clock, settings, library = nu
     writeDraft = null
   }
 
+  // Writes a pending draft now instead of after the debounce; resolves once it is stored.
+  function flushDraft() {
+    clearTimeout(draftTimer)
+    return writeDraft?.() ?? draftWrite ?? Promise.resolve()
+  }
+  // Leaving or hiding the page writes the pending draft, so a reload right after typing keeps it.
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushDraft() })
+  window.addEventListener('pagehide', () => flushDraft())
+
   // Replaces the working copy and shows it in the editor (no draft write, no run).
-  function setWorkingCopy(cur) {
+  // `newHistory` starts the editor's undo history over.
+  function setWorkingCopy(cur, { newHistory = false } = {}) {
     code = cur.code
     work = { mode: cur.mode ?? 'auto', runMode: cur.runMode ?? 'auto', settings: clone(cur.settings ?? DEFAULT_CREATION_SETTINGS) }
     clearTimeout(changeTimer)
-    editor.setCode(code, { silent: true })
+    editor.setCode(code, { silent: true, newHistory })
     editor.setLanguage?.(concreteMode())
     setError(null)
   }
@@ -146,6 +156,7 @@ export function createSession({ container, editor, clock, settings, library = nu
   }
 
   async function restart() {
+    flushDraft() // stored before the code runs, in case it hangs the page
     clearTimeout(changeTimer)
     setSafeStart(false)
     const gen = ++generation
@@ -185,6 +196,7 @@ export function createSession({ container, editor, clock, settings, library = nu
 
   async function rebuild() {
     if (safeStart || !runner?.supportsTime || runner.dead || wantedKey() !== runnerKey) return restart()
+    flushDraft() // stored before the code runs, in case it hangs the page
     const gen = generation, r = runner
     const wasPausedByError = pausedByError
     const token = busy = {}
@@ -242,7 +254,7 @@ export function createSession({ container, editor, clock, settings, library = nu
       creation = { id: c.id ?? null, name: c.name ?? 'untitled' }
       saved = { code: version.code, mode: version.mode, runMode: version.runMode ?? 'auto', settings: clone(version.settings ?? DEFAULT_CREATION_SETTINGS) }
       cancelDraft()
-      setWorkingCopy(draft ?? saved)
+      setWorkingCopy(draft ?? saved, { newHistory: true }) // undo never reaches the previous creation
       emit('codeChanged', { code, modified: isModified() })
       if (safe && resolvedRunMode() === 'page') {
         generation++ // drop anything still in flight for the previous creation
@@ -336,11 +348,7 @@ export function createSession({ container, editor, clock, settings, library = nu
       return restart()
     },
 
-    // Writes a pending draft now instead of after the debounce; resolves once it is stored.
-    flushDraft() {
-      clearTimeout(draftTimer)
-      return writeDraft?.() ?? draftWrite ?? Promise.resolve()
-    },
+    flushDraft,
 
     // Records `version` (a working copy just stored by library.saveVersion) as saved.
     // Edits made while saving stay modified and get their draft written again.

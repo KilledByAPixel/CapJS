@@ -50,6 +50,7 @@ const languageKey = mode => mode === 'html' ? 'html' : mode === 'shadertoy' ? 'c
 export function createEditor(parent, { theme = 'capjs', fontSize = 2, onChange = () => {}, keys = {} } = {}) {
   const themeConf = new Compartment()
   const languageConf = new Compartment()
+  const historyConf = new Compartment()
   let language = languageKey('dweet')
   let silent = false
 
@@ -71,7 +72,7 @@ export function createEditor(parent, { theme = 'capjs', fontSize = 2, onChange =
         lineNumbers(),
         highlightActiveLineGutter(),
         highlightSpecialChars(),
-        history(),
+        historyConf.of(history()),
         drawSelection(),
         dropCursor(),
         EditorState.allowMultipleSelections.of(true),
@@ -101,12 +102,17 @@ export function createEditor(parent, { theme = 'capjs', fontSize = 2, onChange =
   const editor = {
     view,
     getCode: () => view.state.doc.toString(),
-    setCode(code, { silent: quiet = false } = {}) {
+    // With `newHistory`, undo history starts over (another creation was opened).
+    setCode(code, { silent: quiet = false, newHistory = false } = {}) {
       silent = quiet
       try {
         view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: code } })
       } finally {
         silent = false
+      }
+      if (newHistory) {
+        view.dispatch({ effects: historyConf.reconfigure([]) })
+        view.dispatch({ effects: historyConf.reconfigure(history()) })
       }
     },
     setTheme(name) {

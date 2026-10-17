@@ -32,13 +32,16 @@ export const getAllByIndex = (db, name, index, key) =>
 
 // Run fn(stores) inside one readwrite transaction over several stores; resolves
 // once the transaction commits. fn must only issue IDB requests synchronously.
-export function transact(db, names, fn) {
+// With `commit`, the transaction is committed explicitly right after fn, which
+// lets it finish even if the page unloads before the requests' callbacks run.
+export function transact(db, names, fn, { commit = false } = {}) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(names, 'readwrite')
     const stores = Object.fromEntries(names.map(n => [n, tx.objectStore(n)]))
     tx.oncomplete = () => resolve()
     tx.onerror = () => reject(tx.error)
     tx.onabort = () => reject(tx.error)
-    try { fn(stores) } catch (e) { tx.abort(); reject(e) }
+    try { fn(stores) } catch (e) { tx.abort(); reject(e); return }
+    if (commit) tx.commit?.()
   })
 }

@@ -79,3 +79,56 @@ test('blocked localStorage and IndexedDB still boot a working editor', async ({ 
   await page.selectOption('#theme-select', 'light') // a settings save must not throw either
   expect(errors).toEqual([])
 })
+test('reloading right after typing keeps the edit', async ({ page }) => {
+  await typeCode(page, 'x.fillRect(0,0,77,77)//justTyped')
+  await page.waitForTimeout(150)
+  await page.reload(); await page.waitForFunction(() => window.capjsDebug)
+  await expect.poll(() => code(page)).toBe('x.fillRect(0,0,77,77)//justTyped')
+})
+test('the draft is stored by the time an edit runs', async ({ page }) => {
+  await typeCode(page, 'x.fillRect(0,0,55,55)//runNow')
+  await page.waitForTimeout(400) // the run starts at 300 ms; the draft timer alone would fire at 500 ms
+  const stored = await page.evaluate(() => new Promise((resolve, reject) => {
+    const req = indexedDB.open('capjs')
+    req.onerror = () => reject(req.error)
+    req.onsuccess = () => {
+      const get = req.result.transaction('drafts').objectStore('drafts').get(capjsDebug.session.creation.id)
+      get.onsuccess = () => { resolve(get.result?.code ?? null); req.result.close() }
+    }
+  }))
+  expect(stored).toBe('x.fillRect(0,0,55,55)//runNow')
+})
+test('undo never reaches into the previously open creation', async ({ page }) => {
+  await page.click('#btn-fork')
+  await expect(page.locator('.lib-item')).toHaveCount(2)
+  await typeCode(page, 'x.fillRect(0,0,11,11)//inFork')
+  await page.locator('.lib-item').nth(1).click()
+  await expect.poll(() => code(page)).not.toContain('inFork')
+  const opened = await code(page)
+  await page.click('#editor .cm-content'); await page.keyboard.press('Control+Z'); await page.keyboard.press('Control+Z')
+  await page.waitForTimeout(100)
+  expect(await code(page)).toBe(opened)
+})
+test('History Open asks before replacing unsaved edits', async ({ page }) => {
+  const v1 = await code(page)
+  await typeCode(page, 'x.fillRect(0,0,22,22)//unsaved')
+  const dialogs = []
+  page.once('dialog', d => { dialogs.push(d.message()); d.dismiss() })
+  await page.click('#btn-history'); await page.locator('#history-panel [data-version-id]').last().getByText('Open').click()
+  await expect.poll(() => dialogs.length).toBe(1)
+  expect(await code(page)).toBe('x.fillRect(0,0,22,22)//unsaved')
+  page.once('dialog', d => { dialogs.push(d.message()); d.accept() })
+  await page.click('#btn-history'); await page.locator('#history-panel [data-version-id]').last().getByText('Open').click()
+  await expect.poll(() => code(page)).toBe(v1)
+  expect(dialogs).toHaveLength(2)
+})
+test('saving right after typing leaves no stale draft behind', async ({ page }) => {
+  await typeCode(page, 'x.fillRect(0,0,33,33)//first')
+  await page.waitForTimeout(700) // its draft is stored
+  await typeCode(page, 'x.fillRect(0,0,44,44)//second')
+  await page.keyboard.press('Control+S')
+  await expect(page.locator('#modified-dot')).toBeHidden()
+  await page.reload(); await page.waitForFunction(() => window.capjsDebug)
+  await expect.poll(() => code(page)).toBe('x.fillRect(0,0,44,44)//second')
+  await expect(page.locator('#modified-dot')).toBeHidden()
+})

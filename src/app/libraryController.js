@@ -114,6 +114,7 @@ export function createLibraryController({ session, settings, saveSettings, lib }
   const history = createHistory({
     handlers: {
       onOpen: v => {
+        if (session.modified && !confirm(`Replace your unsaved changes with v${v.n}?`)) return
         viewedVersionId = v.id
         session.loadAsDraft(v)
       },
@@ -202,6 +203,8 @@ export function createLibraryController({ session, settings, saveSettings, lib }
     if (saving) return
     saving = true
     try {
+      // The stored draft must match what is saved, so saveVersion can tell it from newer edits.
+      await session.flushDraft()
       const copy = session.workingCopy
       const bg = copy.settings.background
       const thumbnail = await grabThumbnail(bg?.enabled ? bg.color : null)

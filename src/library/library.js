@@ -81,6 +81,8 @@ export async function openLibrary({ dbName = 'capjs', now = Date.now } = {}) {
       settings: clone(settings), createdAt: t,
     }
     const saves = (await getKV('savesSinceExport')) ?? 0
+    // A draft with other code holds edits made after this save started: keep it.
+    const draft = await getDraft(creationId)
     const updated = {
       ...creation, mode, runMode, settings: clone(settings),
       headVersionId: version.id, versionCount: version.n, updatedAt: t,
@@ -89,7 +91,7 @@ export async function openLibrary({ dbName = 'capjs', now = Date.now } = {}) {
     await transact(db, ['creations', 'versions', 'drafts', 'kv'], s => {
       s.versions.put(version)
       s.creations.put(updated)
-      s.drafts.delete(creationId)
+      if (draft && draft.code === code) s.drafts.delete(creationId)
       s.kv.put({ key: 'savesSinceExport', value: saves + 1 })
     })
     return version
@@ -109,9 +111,20 @@ export async function openLibrary({ dbName = 'capjs', now = Date.now } = {}) {
     await put(db, 'creations', { ...c, name, updatedAt: now() })
   }
 
+  // The put is issued and committed at once, with no await before it, so a draft
+  // written as the page unloads (pagehide) still lands. The creation is checked in
+  // the same transaction; a draft for a missing creation is removed again and rejects.
   const setDraft = serial(async (creationId, { code, mode, runMode, settings }) => {
-    await requireRecord('creations', creationId)
-    await put(db, 'drafts', { creationId, code, mode, runMode, settings: clone(settings), updatedAt: now() })
+    const draft = { creationId, code, mode, runMode, settings: clone(settings), updatedAt: now() }
+    let check
+    await transact(db, ['creations', 'drafts'], s => {
+      check = s.creations.get(creationId)
+      s.drafts.put(draft)
+    }, { commit: true })
+    if (!check.result) {
+      await del(db, 'drafts', creationId)
+      throw new Error(`creations record not found: ${creationId}`)
+    }
   })
   const discardDraft = serial(creationId => del(db, 'drafts', creationId))
 
