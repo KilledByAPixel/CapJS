@@ -5,6 +5,7 @@ const code = (page) => page.evaluate(() => capjsDebug.session.code)
 test.beforeEach(async ({ page }) => { await page.goto('./'); await page.waitForFunction(() => window.capjsDebug) })
 
 test('save adds a version with a thumbnail; history can reopen v1', async ({ page }) => {
+  const v1 = await code(page)
   await typeCode(page, 'x.fillRect(0,0,99,99)')
   await expect(page.locator('#modified-dot')).toBeVisible()
   await page.keyboard.press('Control+S')
@@ -13,6 +14,16 @@ test('save adds a version with a thumbnail; history can reopen v1', async ({ pag
   await expect(page.locator('.lib-item img').first()).toHaveAttribute('src', /^blob:/)
   await page.click('#btn-history'); await page.locator('#history-panel [data-version-id]').last().getByText('Open').click()
   expect(await code(page)).not.toBe('x.fillRect(0,0,99,99)')
+  expect(await code(page)).toBe(v1)
+})
+// Ruling R20: the Fork button copies the editor's current contents, unsaved edits included.
+test('fork copies unsaved edits into the new creation', async ({ page }) => {
+  await typeCode(page, 'unsavedFork()')
+  await page.click('#btn-fork')
+  await expect(page.locator('.lib-item')).toHaveCount(2)
+  await expect(page.locator('#creation-name')).toHaveValue(/ fork$/)
+  expect(await code(page)).toBe('unsavedFork()')
+  expect(await page.evaluate(() => capjsDebug.session.modified)).toBe(false)
 })
 test('fork creates a second creation; switching keeps unsaved drafts', async ({ page }) => {
   await page.click('#btn-fork')

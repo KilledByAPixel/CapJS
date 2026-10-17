@@ -3,6 +3,8 @@
 //
 // With `lib` null (the library could not be opened) the app runs in memory:
 // #library-error shows, the sidebar stays hidden, and Save downloads a .txt file.
+// If the library opens but no creation can be loaded at boot, the app also falls
+// back to an in-memory creation (Save then downloads too).
 
 import { createSidebar } from '../ui/sidebar.js'
 import { createGallery } from '../ui/gallery.js'
@@ -18,29 +20,39 @@ import { MODES } from '../runner/protocol.js'
 
 export const SIDEBAR_COUNT = 30
 export const NUDGE_AFTER_MS = 14 * 24 * 3600 * 1000
-const TEXT_FILE = /\.(txt|js|html?)$/i
+const BACKUP_FORMAT = 'capjs-library'
 
 export function createLibraryController({ session, settings, saveSettings, lib }) {
   const $ = id => document.getElementById(id)
   const discardButton = $('btn-discard')
 
-  let viewedVersionId = null // a version loaded from History; Fork forks from it
+  let viewedVersionId = null // a version loaded from History; Fork records it as the parent
   let openSeq = 0
   let saving = false
 
+  const downloadText = () => downloadBlob(new Blob([session.code], { type: 'text/plain' }), `${session.creation.name}.txt`)
+
+  // A creation that lives only in memory: the share link's program, or the dweet template.
+  function openInMemory(shared) {
+    const start = sharedStart(shared)
+    const t = TEMPLATES.find(t => t.id === 'dweet')
+    session.open({
+      creation: { id: null, name: start?.name ?? t.name },
+      version: {
+        code: start?.code ?? t.code, mode: start ? sharedMode(start) : templateMode(t),
+        runMode: 'auto', settings: DEFAULT_CREATION_SETTINGS,
+      },
+      safeStart: true,
+    })
+  }
+
   if (!lib) {
-    const save = () => downloadBlob(new Blob([session.code], { type: 'text/plain' }), `${session.creation.name}.txt`)
     return {
-      actions: { save },
+      actions: { save: downloadText },
       boot(shared) {
         $('library-error').hidden = false
         $('btn-sidebar-toggle').hidden = true
-        const start = sharedStart(shared) ?? TEMPLATES.find(t => t.id === 'dweet')
-        session.open({
-          creation: { id: null, name: start.name },
-          version: { code: start.code, mode: startMode(start), runMode: 'auto', settings: DEFAULT_CREATION_SETTINGS },
-          safeStart: true,
-        })
+        openInMemory(shared)
       },
     }
   }
@@ -71,6 +83,8 @@ export function createLibraryController({ session, settings, saveSettings, lib }
     console.error(what, e)
     alert(`${what}: ${e?.message ?? e}`)
   }
+  // Wraps an async action so a failure is reported instead of left unhandled.
+  const guard = (what, fn) => (...args) => fn(...args).catch(e => report(what, e))
 
   // --- UI ---
 
@@ -78,7 +92,7 @@ export function createLibraryController({ session, settings, saveSettings, lib }
     templates: TEMPLATES,
     open: settings.sidebarOpen,
     handlers: {
-      onOpen: id => openCreation(id).catch(e => report('Could not open', e)),
+      onOpen: guard('Could not open', id => openCreation(id)),
       onDelete: id => deleteCreation(id),
       onNew: id => newFromTemplate(id),
       onShowAll: () => gallery.show(),
@@ -89,12 +103,12 @@ export function createLibraryController({ session, settings, saveSettings, lib }
   })
   const gallery = createGallery({
     handlers: {
-      onOpen: id => openCreation(id).catch(e => report('Could not open', e)),
+      onOpen: guard('Could not open', id => openCreation(id)),
       onDelete: id => deleteCreation(id),
-      onRestore: id => lib.restoreCreation(id).then(refresh).catch(e => report('Could not restore', e)),
+      onRestore: guard('Could not restore', id => lib.restoreCreation(id).then(refresh)),
       onPurge: id => purgeCreation(id),
       onImportFiles: files => importFiles(files),
-      onShow: () => refresh(),
+      onShow: guard('Could not list creations', () => refresh()),
     },
   })
   const history = createHistory({
@@ -103,7 +117,7 @@ export function createLibraryController({ session, settings, saveSettings, lib }
         viewedVersionId = v.id
         session.loadAsDraft(v)
       },
-      onFork: v => fork(v.id),
+      onFork: v => forkVersion(v.id),
     },
   })
 
@@ -113,7 +127,7 @@ export function createLibraryController({ session, settings, saveSettings, lib }
     viewedVersionId = null
     session.discardDraft()
   })
-  session.on('renamed', () => refresh())
+  session.on('renamed', guard('Could not refresh the library', () => refresh()))
 
   async function refresh() {
     const all = await lib.listCreations({ includeDeleted: true })
@@ -142,6 +156,8 @@ export function createLibraryController({ session, settings, saveSettings, lib }
     if (!creation) throw new Error(`Creation not found: ${id}`)
     const [version, draft] = await Promise.all([lib.getVersion(creation.headVersionId), lib.getDraft(id)])
     if (seq !== openSeq) return // a later open won
+    await session.flushDraft() // edits typed while loading
+    if (seq !== openSeq) return
     viewedVersionId = null
     settings.currentCreationId = id
     saveSettings(settings)
@@ -149,7 +165,7 @@ export function createLibraryController({ session, settings, saveSettings, lib }
     await refresh()
   }
 
-  const createFromTemplate = t => lib.createCreation({ name: t.name, mode: startMode(t), code: t.code })
+  const createFromTemplate = t => lib.createCreation({ name: t.name, mode: templateMode(t), code: t.code })
 
   async function newFromTemplate(templateId) {
     try {
@@ -182,7 +198,8 @@ export function createLibraryController({ session, settings, saveSettings, lib }
 
   async function save() {
     const id = session.creation.id
-    if (saving || !id) return
+    if (!id) return downloadText() // the in-memory fallback
+    if (saving) return
     saving = true
     try {
       const copy = session.workingCopy
@@ -203,11 +220,27 @@ export function createLibraryController({ session, settings, saveSettings, lib }
     }
   }
 
-  async function fork(versionId = viewedVersionId) {
+  // Fork button (R20): a new creation whose v1 is the editor's current contents,
+  // unsaved edits included. Its parent version is the one viewed, or the head.
+  async function forkCurrent() {
     const id = session.creation.id
     if (!id) return
     try {
-      const creation = await lib.fork(id, versionId ?? undefined)
+      const parent = await lib.getCreation(id)
+      const creation = await lib.createCreation({
+        ...session.workingCopy,
+        name: `${session.creation.name} fork`,
+        parentId: id,
+        parentVersionId: viewedVersionId ?? parent?.headVersionId ?? null,
+      })
+      await openCreation(creation.id)
+    } catch (e) { report('Could not fork', e) }
+  }
+
+  // History -> Fork: a new creation from that saved version.
+  async function forkVersion(versionId) {
+    try {
+      const creation = await lib.fork(session.creation.id, versionId)
       await openCreation(creation.id)
     } catch (e) { report('Could not fork', e) }
   }
@@ -216,16 +249,18 @@ export function createLibraryController({ session, settings, saveSettings, lib }
     if (history.isOpen) return history.hide()
     const id = session.creation.id
     if (!id) return
-    const [creation, versions] = await Promise.all([lib.getCreation(id), lib.listVersions(id)])
-    history.show(versions, { headId: creation?.headVersionId, viewedId: viewedVersionId })
+    try {
+      const [creation, versions] = await Promise.all([lib.getCreation(id), lib.listVersions(id)])
+      history.show(versions, { headId: creation?.headVersionId, viewedId: viewedVersionId })
+    } catch (e) { report('Could not load the history', e) }
   }
 
   // --- Delete ---
 
   async function deleteCreation(id) {
-    const creation = await lib.getCreation(id)
-    if (!creation || !confirm(`Delete "${creation.name}"? You can restore it from Show all.`)) return
     try {
+      const creation = await lib.getCreation(id)
+      if (!creation || !confirm(`Delete "${creation.name}"? You can restore it from Show all.`)) return
       const isCurrent = id === session.creation.id
       if (isCurrent) await session.flushDraft()
       await lib.deleteCreation(id)
@@ -235,9 +270,9 @@ export function createLibraryController({ session, settings, saveSettings, lib }
   }
 
   async function purgeCreation(id) {
-    const creation = await lib.getCreation(id)
-    if (!creation || !confirm(`Delete "${creation.name}" and all its versions forever? This cannot be undone.`)) return
     try {
+      const creation = await lib.getCreation(id)
+      if (!creation || !confirm(`Delete "${creation.name}" and all its versions forever? This cannot be undone.`)) return
       await lib.purgeCreation(id)
       await refresh()
     } catch (e) { report('Could not delete', e) }
@@ -253,47 +288,57 @@ export function createLibraryController({ session, settings, saveSettings, lib }
     } catch (e) { report('Export failed', e) }
   }
 
-  // .txt/.js/.html files become one creation each; any other file is tried as a
-  // library backup (.json, but a download may have lost its extension).
+  // Every file is sorted by content (R21): JSON with format 'capjs-library' is a backup
+  // to merge; any other text becomes one creation; binary files are refused.
   async function importFiles(files) {
-    const texts = files.filter(f => TEXT_FILE.test(f.name))
-    const backups = files.filter(f => !TEXT_FILE.test(f.name))
-    for (const file of backups) {
+    const texts = []
+    for (const file of files) {
       try {
-        let data
-        try { data = JSON.parse(await file.text()) } catch { throw new Error('Not a CapJS library file') }
-        const r = await importLibrary(lib, data)
-        alert(`Imported ${file.name}: ${r.addedCreations} new creations, ${r.addedVersions} new versions, ${r.skipped} skipped.`)
+        const text = await file.text()
+        let data = null
+        try { data = JSON.parse(text) } catch { /* not JSON: a program */ }
+        if (data?.format === BACKUP_FORMAT) {
+          const r = await importLibrary(lib, data)
+          alert(`Imported ${file.name}: ${r.addedCreations} new creations, ${r.addedVersions} new versions, ${r.skipped} skipped.`)
+        } else if (text.includes('\0')) {
+          alert(`Could not import ${file.name}: it is neither a CapJS library backup nor a text file.`)
+        } else {
+          texts.push({ name: file.name, text })
+        }
       } catch (e) {
         alert(`Could not import ${file.name}: ${e.message}`)
       }
     }
-    if (texts.length) {
-      try {
-        await importTextFiles(lib, await Promise.all(texts.map(async f => ({ name: f.name, text: await f.text() }))))
-      } catch (e) { report('Import failed', e) }
-    }
-    await refresh()
+    try {
+      if (texts.length) await importTextFiles(lib, texts)
+      await refresh()
+    } catch (e) { report('Import failed', e) }
   }
 
   return {
-    actions: { save, fork: () => fork(), history: showHistory },
+    actions: { save, fork: forkCurrent, history: showHistory },
 
     // Opens the shared program as a new creation, else the last open creation
     // (or the most recent; or a new dweet), restoring its draft. Page code waits for a click.
+    // If that fails, an in-memory creation keeps the app usable.
     async boot(shared) {
       $('sidebar').hidden = false
-      const start = sharedStart(shared)
-      const last = settings.currentCreationId && await lib.getCreation(settings.currentCreationId)
-      if (start) {
-        const creation = await lib.createCreation({ name: start.name, mode: startMode(start), code: start.code })
-        await openCreation(creation.id, { safeStart: true })
-      } else if (last && last.deletedAt == null) {
-        await openCreation(last.id, { safeStart: true })
-      } else {
-        await openMostRecent({ safeStart: true })
+      try {
+        const start = sharedStart(shared)
+        const last = settings.currentCreationId && await lib.getCreation(settings.currentCreationId)
+        if (start) {
+          const creation = await lib.createCreation({ name: start.name, mode: sharedMode(start), code: start.code })
+          await openCreation(creation.id, { safeStart: true })
+        } else if (last && last.deletedAt == null) {
+          await openCreation(last.id, { safeStart: true })
+        } else {
+          await openMostRecent({ safeStart: true })
+        }
+        await updateNudge()
+      } catch (e) {
+        console.error('Could not open a creation from the library', e)
+        openInMemory(shared)
       }
-      await updateNudge()
     },
   }
 }
@@ -301,9 +346,11 @@ export function createLibraryController({ session, settings, saveSettings, lib }
 // A share link's program as {name, mode, code}, or null.
 const sharedStart = shared => shared && { name: shared.name || 'shared', mode: shared.mode, code: shared.code }
 
-// The mode for a template or shared program {mode, code}: auto when detection already
-// picks its mode. So templates start in auto, except js, which is never detected (R19).
-function startMode({ mode, code }) {
+// Templates start in auto, except js, which is never auto-detected (R19).
+const templateMode = t => t.mode === 'js' ? 'js' : 'auto'
+
+// A share link's mode: auto when detection already picks it, so later edits keep detecting.
+function sharedMode({ mode, code }) {
   if (!MODES.includes(mode)) return 'auto'
   return detectMode(code) === mode ? 'auto' : mode
 }
