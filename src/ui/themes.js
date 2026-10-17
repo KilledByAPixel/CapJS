@@ -1,4 +1,4 @@
-// Editor themes. `capjs` is ported from legacy/codemirror/theme/capjs.css.
+// Editor themes. `capjs` is ported from the original CapJS editor theme (capjs.css).
 
 import { EditorView } from '@codemirror/view'
 import { HighlightStyle, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'

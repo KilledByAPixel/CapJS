@@ -96,3 +96,28 @@ test('a malformed element anywhere means nothing is written', async () => {
   expect(await b.listCreations({ includeDeleted: true })).toHaveLength(0)
   expect(await b.raw.getAll('versions')).toHaveLength(0)
 })
+test('creations need a name, an updatedAt and a head among their versions', async () => {
+  const a = await open(); const c = await a.createCreation(base)
+  const file = JSON.parse(JSON.stringify(await exportLibrary(a)))
+  const b = await open()
+  const withCreation = patch => ({ ...file, creations: [{ ...file.creations[0], ...patch }] })
+  for (const patch of [{ name: 7 }, { name: undefined }, { updatedAt: '1' }, { headVersionId: 'nope' }, { headVersionId: 3 }])
+    await expect(importLibrary(b, withCreation(patch)), JSON.stringify(patch)).rejects.toThrow('Not a CapJS library file')
+  // A head that belongs to another creation's versions is not this creation's head.
+  const other = await a.createCreation({ ...base, name: 'other' })
+  const two = JSON.parse(JSON.stringify(await exportLibrary(a)))
+  const swapped = two.creations.map(x => x.id === c.id ? { ...x, headVersionId: other.headVersionId } : x)
+  await expect(importLibrary(b, { ...two, creations: swapped })).rejects.toThrow('Not a CapJS library file')
+  expect(await b.listCreations({ includeDeleted: true })).toHaveLength(0)
+  expect(await b.raw.getAll('versions')).toHaveLength(0)
+})
+test('when merging, a head may be one of the local versions', async () => {
+  const a = await open(); const c = await a.createCreation(base)
+  const b = await open(); await importLibrary(b, await exportLibrary(a))
+  await save(a, c, 'newer')
+  const file = JSON.parse(JSON.stringify(await exportLibrary(a)))
+  const v1 = file.versions.find(v => v.n === 1)
+  // Only the new version is in the file, and the head points at the local v1.
+  const partial = { ...file, creations: [{ ...file.creations[0], headVersionId: v1.id }], versions: file.versions.filter(v => v.n === 2) }
+  expect((await importLibrary(b, partial)).addedVersions).toBe(1)
+})

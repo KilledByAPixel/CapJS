@@ -6,6 +6,7 @@
 // onShow() (the gallery wants fresh data: call render).
 
 import { el, formatAge, installFileDrop, thumbElement } from './sidebar.js'
+import { closeOnEscape } from './overlays.js'
 
 export function createGallery({ handlers }) {
   const $ = id => document.getElementById(id)
@@ -24,7 +25,7 @@ export function createGallery({ handlers }) {
 
   $('btn-gallery-close').addEventListener('click', hide)
   gallery.addEventListener('click', e => { if (e.target === gallery) hide() })
-  window.addEventListener('keydown', e => { if (e.key === 'Escape' && !gallery.hidden) hide() })
+  closeOnEscape(gallery, hide)
   search.addEventListener('input', () => draw())
   sort.addEventListener('change', () => draw())
   installFileDrop(gallery, handlers.onImportFiles)

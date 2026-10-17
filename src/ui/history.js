@@ -4,13 +4,14 @@
 // handlers: onOpen(version), onFork(version).
 
 import { el, formatAge } from './sidebar.js'
+import { closeOnEscape } from './overlays.js'
 
 export function createHistory({ handlers }) {
   const panel = document.getElementById('history-panel')
   let versions = []
 
   const hide = () => { panel.hidden = true }
-  window.addEventListener('keydown', e => { if (e.key === 'Escape') hide() })
+  closeOnEscape(panel, hide)
   document.addEventListener('pointerdown', e => {
     if (!panel.hidden && !panel.contains(e.target) && e.target.id !== 'btn-history') hide()
   })

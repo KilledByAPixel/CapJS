@@ -97,3 +97,19 @@ test('an image dropped on a page-mode canvas becomes the custom image', async ({
   await expect(page.locator('#image-name')).toHaveText('dot.png')
   await expect(page.locator('#drop-overlay')).toBeHidden()
 })
+test('Escape closes only the topmost open overlay', async ({ page }) => {
+  await page.click('#btn-history'); await expect(page.locator('#history-panel')).toBeVisible()
+  await page.evaluate(() => document.querySelector('#btn-help').click()) // no pointerdown, so History stays open
+  await expect(page.locator('#help-panel')).toBeVisible()
+  await page.evaluate(() => document.querySelector('#btn-show-all').click()) // the gallery stacks above the help
+  await expect(page.locator('#gallery')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('#gallery')).toBeHidden()
+  await expect(page.locator('#help-panel')).toBeVisible()
+  await expect(page.locator('#history-panel')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('#help-panel')).toBeHidden()
+  await expect(page.locator('#history-panel')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('#history-panel')).toBeHidden()
+})

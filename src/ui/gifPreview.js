@@ -2,6 +2,7 @@
 // limit, and Download. Nothing is saved until Download is clicked.
 
 import { downloadBlob } from './download.js'
+import { closeOnEscape } from './overlays.js'
 
 export function createGifPreview() {
   const $ = id => document.getElementById(id)
@@ -19,7 +20,7 @@ export function createGifPreview() {
   $('btn-gif-download').addEventListener('click', () => current && downloadBlob(current.blob, current.filename))
   $('btn-gif-close').addEventListener('click', close)
   overlay.addEventListener('click', e => { if (e.target === overlay) close() })
-  window.addEventListener('keydown', e => { if (e.key === 'Escape' && current) close() })
+  closeOnEscape(overlay, close, () => !!current)
 
   return {
     open({ blob, overLimit, filename }) {

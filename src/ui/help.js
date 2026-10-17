@@ -2,6 +2,8 @@
 // createHelp({ templates, onTemplate }) -> { open, close, toggle, isOpen }.
 // onTemplate(id) creates and opens a creation (the same action as the New menu).
 
+import { closeOnEscape } from './overlays.js'
+
 const SHORTCUTS = [
   ['Alt+Up', 'Pause / resume'],
   ['Alt+Down, Alt+Enter', 'Restart'],
@@ -74,9 +76,7 @@ export function createHelp({ templates, onTemplate }) {
     onTemplate(button.dataset.template)
   })
   panel.addEventListener('click', e => { if (e.target === panel) close() })
-  window.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && !panel.hidden) { e.preventDefault(); e.stopPropagation(); close() }
-  })
+  closeOnEscape(panel, close)
 
   return {
     open, close,

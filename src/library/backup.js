@@ -35,10 +35,11 @@ export async function importLibrary(lib, data) {
   const isObj = v => v !== null && typeof v === 'object'
   const str = v => typeof v === 'string'
   const num = v => typeof v === 'number'
-  const bad = data.creations.some(c => !isObj(c) || !str(c.id)) ||
+  const bad = data.creations.some(c => !isObj(c) || !str(c.id) || !str(c.name) || !num(c.updatedAt) || !str(c.headVersionId)) ||
     data.versions.some(v => !isObj(v) || !str(v.id) || !str(v.creationId) || !num(v.createdAt) || !num(v.n) || !str(v.code)) ||
     (Array.isArray(data.tombstones) && data.tombstones.some(t => !isObj(t) || !str(t.id)))
-  if (bad) throw new Error('Not a CapJS library file')
+  const notLibrary = () => new Error('Not a CapJS library file')
+  if (bad) throw notLibrary()
   const incomingTombstones = Array.isArray(data.tombstones) ? data.tombstones : []
   // Decode thumbnails up front so the exclusive section is only IndexedDB work.
   const thumbs = new Map()
@@ -50,12 +51,19 @@ export async function importLibrary(lib, data) {
     if (!byCreation.has(v.creationId)) byCreation.set(v.creationId, [])
     byCreation.get(v.creationId).push(v)
   }
+  // A head that is not among the file's versions for its creation must be a local version (a merge).
+  const headElsewhere = data.creations.filter(c => !(byCreation.get(c.id) ?? []).some(v => v.id === c.headVersionId))
 
   return lib.runExclusive(async () => {
     const { raw } = lib
     const local = new Map((await raw.getAll('creations')).map(c => [c.id, c]))
     const dead = new Set((await raw.getAll('tombstones')).map(t => t.id))
     for (const c of local.values()) if (c.deletedAt != null) dead.add(c.id)
+    for (const c of headElsewhere) { // checked before anything is written
+      if (dead.has(c.id)) continue // skipped anyway
+      const head = local.has(c.id) ? await raw.get('versions', c.headVersionId) : null
+      if (head?.creationId !== c.id) throw notLibrary()
+    }
     const result = { addedCreations: 0, addedVersions: 0, skipped: 0 }
 
     for (const t of incomingTombstones) {

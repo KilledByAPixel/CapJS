@@ -5,7 +5,7 @@ import { wrapLoops } from '../code/loopProtect.js'
 import { parseErrorLine } from '../code/errors.js'
 import { errorInfo, makeReply } from './protocol.js'
 
-// Shadertoy wrapper, ported from the legacy SetShader. The header spans 2 lines,
+// Shadertoy wrapper, ported from the original CapJS's SetShader. The header spans 2 lines,
 // so GLSL line N is editor line N - 2.
 const SHADER_HEADER =
   '#version 300 es\n' +
