@@ -3,7 +3,10 @@ import { test, expect } from '@playwright/test'
 const typeCode = async (page, code) => { await page.click('#editor .cm-content'); await page.keyboard.press('Control+A'); await page.keyboard.insertText(code) }
 const ink = (page) => page.evaluate(() => capjsDebug.sampleFrame())
 
-test.beforeEach(async ({ page }) => { await page.goto('./'); await page.waitForFunction(() => window.capjsDebug) })
+test.beforeEach(async ({ page }) => {
+  await page.goto('./'); await page.waitForFunction(() => window.capjsDebug)
+  if (await page.locator('#help-panel').isVisible()) await page.keyboard.press('Escape') // first run opens the help
+})
 
 test('default program renders and editing re-renders', async ({ page }) => {
   await expect.poll(() => ink(page)).toBeGreaterThan(0)
@@ -45,4 +48,19 @@ test('page-mode infinite loop saved as draft boots to safe start', async ({ page
   await page.reload(); await page.waitForFunction(() => window.capjsDebug)
   await expect(page.locator('#safe-start')).toBeVisible()
   await expect(page.locator('#editor')).toContainText('for(;;)')
+})
+test('help opens, lists shortcuts, starts a template', async ({ page }) => {
+  await page.click('#btn-help')
+  await expect(page.locator('#help-panel')).toContainText('Alt+Up')
+  await page.locator('#help-panel [data-template="three"]').click()
+  await expect(page.locator('#help-panel')).toBeHidden()
+  await expect(page.locator('#editor')).toContainText('THREE')
+})
+test('first run opens the help once', async ({ browser }) => {
+  const ctx = await browser.newContext(); const p = await ctx.newPage()
+  await p.goto('./'); await p.waitForFunction(() => window.capjsDebug)
+  await expect(p.locator('#help-panel')).toBeVisible()
+  await p.reload(); await p.waitForFunction(() => window.capjsDebug)
+  await expect(p.locator('#help-panel')).toBeHidden()
+  await ctx.close()
 })

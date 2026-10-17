@@ -1,7 +1,10 @@
 import { test, expect } from '@playwright/test'
 import fs from 'node:fs'
 import { parseGif } from '../helpers/gifParse.js'
-test.beforeEach(async ({ page }) => { await page.goto('./'); await page.waitForFunction(() => window.capjsDebug) })
+test.beforeEach(async ({ page }) => {
+  await page.goto('./'); await page.waitForFunction(() => window.capjsDebug)
+  if (await page.locator('#help-panel').isVisible()) await page.keyboard.press('Escape') // first run opens the help
+})
 const setCap = async (page, o) => { for (const [k, v] of Object.entries(o)) await page.locator('#cap-' + k).fill(String(v)) }
 
 test('GIF capture: preview, size, single palette, right frame count, unaffected by typing', async ({ page }) => {

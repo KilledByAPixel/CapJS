@@ -16,6 +16,8 @@ import { openLibrary } from './library/library.js'
 import { createLibraryController } from './app/libraryController.js'
 import { createCapturePanel } from './ui/capturePanel.js'
 import { createGifPreview } from './ui/gifPreview.js'
+import { createHelp } from './ui/help.js'
+import { TEMPLATES } from './library/templates.js'
 
 const $ = id => document.getElementById(id)
 const settings = loadSettings()
@@ -52,7 +54,8 @@ async function boot() {
     prompt('CapJS Code URL\nThis url contains your entire program!\nYou can share or bookmark this link.', url)
   }
 
-  createTopbar({ session, editor, settings, saveSettings, actions: { ...library.actions, share } })
+  const help = createHelp({ templates: TEMPLATES, onTemplate: id => library.actions.newFromTemplate(id) })
+  createTopbar({ session, editor, settings, saveSettings, actions: { ...library.actions, share, help: help.toggle } })
   const transport = createTransport({ session })
   createCapturePanel({ session, settings, saveSettings, transport, preview: createGifPreview() })
   canvasPanel = createCanvasPanel({ session, settings, saveSettings, kv: lib })
@@ -63,7 +66,10 @@ async function boot() {
   // A share link opens as a new creation; otherwise the last one.
   const shared = parseShareUrl(location.href)
   if (shared) history.replaceState(null, '', location.pathname + location.hash)
+  // First run: no creations yet and the help was never shown.
+  const firstRun = lib && !(await lib.listCreations({ includeDeleted: true })).length && !(await lib.getKV('helpShown'))
   await library.boot(shared)
+  if (firstRun) { help.open(); await lib.setKV('helpShown', true) }
   canvasPanel.restoreImage()
 
   window.capjsDebug = {

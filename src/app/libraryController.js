@@ -33,9 +33,9 @@ export function createLibraryController({ session, settings, saveSettings, lib }
   const downloadText = () => downloadBlob(new Blob([session.code], { type: 'text/plain' }), `${session.creation.name}.txt`)
 
   // A creation that lives only in memory: the share link's program, or the dweet template.
-  function openInMemory(shared) {
+  function openInMemory(shared, templateId = 'dweet') {
     const start = sharedStart(shared)
-    const t = TEMPLATES.find(t => t.id === 'dweet')
+    const t = TEMPLATES.find(t => t.id === templateId)
     session.open({
       creation: { id: null, name: start?.name ?? t.name },
       version: {
@@ -48,7 +48,7 @@ export function createLibraryController({ session, settings, saveSettings, lib }
 
   if (!lib) {
     return {
-      actions: { save: downloadText },
+      actions: { save: downloadText, newFromTemplate: id => openInMemory(null, id) },
       boot(shared) {
         $('library-error').hidden = false
         $('btn-sidebar-toggle').hidden = true
@@ -316,7 +316,7 @@ export function createLibraryController({ session, settings, saveSettings, lib }
   }
 
   return {
-    actions: { save, fork: forkCurrent, history: showHistory },
+    actions: { save, fork: forkCurrent, history: showHistory, newFromTemplate },
 
     // Opens the shared program as a new creation, else the last open creation
     // (or the most recent; or a new dweet), restoring its draft. Page code waits for a click.

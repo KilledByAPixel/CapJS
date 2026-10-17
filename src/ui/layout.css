@@ -421,3 +421,33 @@ button.share { background: #ff8; }
 }
 .status .big { font-size: 15px; color: #fff; }
 .status .big.over { color: #f55; }
+
+/* --- Help overlay --- */
+
+#help-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: #000b;
+  display: grid;
+  place-items: center;
+}
+.help-box {
+  width: min(760px, 92vw);
+  max-height: 88vh;
+  box-sizing: border-box;
+  padding: 12px 16px;
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow-y: auto;
+}
+.help-box header { display: flex; gap: 10px; align-items: center; }
+.help-box header b { font-size: 16px; color: #fff; }
+.help-box h5 { margin: 14px 0 4px; color: var(--accent); }
+.help-box h6 { margin: 8px 0 2px; color: #fff; font-size: 13px; }
+.help-box ul { margin: 0; padding-left: 18px; }
+.help-box dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 16px; margin: 0; }
+.help-box dt { color: #fff; }
+.help-box dd { margin: 0; color: var(--dim); }
+.help-templates { display: flex; flex-wrap: wrap; gap: 6px; }
