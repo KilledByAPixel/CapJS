@@ -41,7 +41,7 @@ function el(tag, props = {}, children = []) {
 export function createHelp({ templates, onTemplate }) {
   const panel = document.getElementById('help-panel')
   const close = () => { panel.hidden = true }
-  const open = () => { panel.hidden = false }
+  const open = () => { panel.hidden = false; panel.querySelector('#btn-help-close').focus() }
 
   const section = (title, ...body) => el('section', {}, [el('h5', { textContent: title }), ...body])
   const list = items => el('ul', {}, items.map(text => el('li', { textContent: text })))
@@ -74,7 +74,9 @@ export function createHelp({ templates, onTemplate }) {
     onTemplate(button.dataset.template)
   })
   panel.addEventListener('click', e => { if (e.target === panel) close() })
-  window.addEventListener('keydown', e => { if (e.key === 'Escape' && !panel.hidden) close() })
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !panel.hidden) { e.preventDefault(); e.stopPropagation(); close() }
+  })
 
   return {
     open, close,

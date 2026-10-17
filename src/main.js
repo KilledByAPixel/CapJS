@@ -67,9 +67,10 @@ async function boot() {
   const shared = parseShareUrl(location.href)
   if (shared) history.replaceState(null, '', location.pathname + location.hash)
   // First run: no creations yet and the help was never shown.
-  const firstRun = lib && !(await lib.listCreations({ includeDeleted: true })).length && !(await lib.getKV('helpShown'))
+  let firstRun = false
+  try { firstRun = !!lib && !(await lib.listCreations({ includeDeleted: true })).length && !(await lib.getKV('helpShown')) } catch (e) { console.error('First-run check failed', e) }
   await library.boot(shared)
-  if (firstRun) { help.open(); await lib.setKV('helpShown', true) }
+  if (firstRun) { help.open(); await lib.setKV('helpShown', true).catch(e => console.error('Could not record helpShown', e)) }
   canvasPanel.restoreImage()
 
   window.capjsDebug = {

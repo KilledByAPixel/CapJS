@@ -1,12 +1,10 @@
 // tests/e2e/app.spec.js
 import { test, expect } from '@playwright/test'
+import { openApp } from '../helpers/app.js'
 const typeCode = async (page, code) => { await page.click('#editor .cm-content'); await page.keyboard.press('Control+A'); await page.keyboard.insertText(code) }
 const ink = (page) => page.evaluate(() => capjsDebug.sampleFrame())
 
-test.beforeEach(async ({ page }) => {
-  await page.goto('./'); await page.waitForFunction(() => window.capjsDebug)
-  if (await page.locator('#help-panel').isVisible()) await page.keyboard.press('Escape') // first run opens the help
-})
+test.beforeEach(async ({ page }) => { await openApp(page) })
 
 test('default program renders and editing re-renders', async ({ page }) => {
   await expect.poll(() => ink(page)).toBeGreaterThan(0)
@@ -51,7 +49,7 @@ test('page-mode infinite loop saved as draft boots to safe start', async ({ page
 })
 test('help opens, lists shortcuts, starts a template', async ({ page }) => {
   await page.click('#btn-help')
-  await expect(page.locator('#help-panel')).toContainText('Alt+Up')
+  for (const k of ['Alt+Up', 'Alt+Down', 'Alt+Enter', 'Alt+Right', 'Ctrl+S', 'Ctrl+Space', 'Ctrl+F']) await expect(page.locator('#help-panel')).toContainText(k)
   await page.locator('#help-panel [data-template="three"]').click()
   await expect(page.locator('#help-panel')).toBeHidden()
   await expect(page.locator('#editor')).toContainText('THREE')

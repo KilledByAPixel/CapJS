@@ -1,11 +1,9 @@
 // tests/e2e/library.spec.js
 import { test, expect } from '@playwright/test'
+import { openApp } from '../helpers/app.js'
 const typeCode = async (page, code) => { await page.click('#editor .cm-content'); await page.keyboard.press('Control+A'); await page.keyboard.insertText(code) }
 const code = (page) => page.evaluate(() => capjsDebug.session.code)
-test.beforeEach(async ({ page }) => {
-  await page.goto('./'); await page.waitForFunction(() => window.capjsDebug)
-  if (await page.locator('#help-panel').isVisible()) await page.keyboard.press('Escape') // first run opens the help
-})
+test.beforeEach(async ({ page }) => { await openApp(page) })
 
 test('save adds a version with a thumbnail; history can reopen v1', async ({ page }) => {
   const v1 = await code(page)
