@@ -360,7 +360,7 @@ export function createSession({ container, editor, clock, settings, library = nu
       return restart()
     },
 
-    // Capture (Task 11) suspends the live loop while it drives the runner itself.
+    // Capture suspends the live loop while it runs its own runner.
     suspendLive(on) {
       suspended = !!on
     },
@@ -374,6 +374,7 @@ export function createSession({ container, editor, clock, settings, library = nu
     get runModeSetting() { return work.runMode },
     get creationSettings() { return clone(work.settings) },
     get creation() { return { ...creation } },
+    get image() { return image }, // the custom image (an ImageBitmap) or null
     get modified() { return isModified() },
     get state() { return state() },
   }

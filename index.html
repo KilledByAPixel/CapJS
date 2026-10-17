@@ -93,7 +93,40 @@
 
         <section class="panel" id="capture-panel">
           <h5>Capture</h5>
+          <div class="grid">
+            <span>Format</span>
+            <select id="cap-format" title="GIF (one global palette) or WebM video">
+              <option value="gif">GIF</option>
+              <option value="webm">WebM</option>
+            </select>
+            <span>Size</span>
+            <span class="row">
+              <input id="cap-width" type="number" min="1" max="8192" value="960" title="Capture width in pixels">
+              ×
+              <input id="cap-height" type="number" min="1" max="8192" value="540" title="Capture height in pixels">
+            </span>
+            <span>Seconds</span>
+            <input id="cap-seconds" type="number" min="0.1" max="600" step="0.5" value="2" title="Length of the capture in seconds">
+            <span>FPS</span>
+            <span class="row">
+              <select id="cap-fps" title="Frames per second">
+                <option value="30">30</option>
+                <option value="60">60</option>
+              </select>
+              <span id="cap-fps-hint" class="dim" hidden>GIFs play at 50 fps max</span>
+            </span>
+            <span class="cap-dither-row">Dither</span>
+            <select id="cap-dither" class="cap-dither-row" title="Dithering hides color banding: error diffusion (smooth), ordered (patterned, smaller files) or none (flat colors, smallest files)">
+              <option value="fs">error diffusion</option>
+              <option value="bayer">ordered</option>
+              <option value="none">none</option>
+            </select>
+            <span>Speed</span>
+            <input id="cap-speed" type="number" min="0.1" max="10" step="0.25" value="1" title="Playback speed: 2 captures twice as much program time per frame">
+          </div>
           <button id="btn-capture" class="capture" title="Render and save an animation">● Capture</button>
+          <progress id="capture-progress" max="1" value="0" hidden title="Capture progress"></progress>
+          <div id="capture-message" role="status"></div>
         </section>
 
         <section class="panel" id="canvas-panel">
@@ -168,6 +201,19 @@
       <div id="gallery-grid"></div>
       <h5>Recently deleted</h5>
       <div id="gallery-deleted"></div>
+    </div>
+  </div>
+  <div id="gif-preview" hidden>
+    <div class="gif-box">
+      <header>
+        <b>GIF preview</b>
+        <span id="gif-size" title="File size"></span>
+        <span class="spacer"></span>
+        <button id="btn-gif-download" class="save" title="Save the GIF">Download</button>
+        <button id="btn-gif-close" title="Close (Esc)">✕</button>
+      </header>
+      <div id="gif-warning" hidden>Over 15 MB: many sites reject GIFs this large. Try a smaller size, fewer seconds, or 30 fps.</div>
+      <img id="gif-image" alt="GIF preview">
     </div>
   </div>
   <script type="module" src="/src/main.js"></script>

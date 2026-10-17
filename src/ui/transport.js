@@ -1,5 +1,5 @@
 // Transport row: restart, pause, step, time readout, slider, fullscreen, screenshot,
-// plus the Capture button's availability. Task 11 installs the screenshot and capture handlers.
+// plus the Capture button's availability. The capture panel installs the screenshot and capture handlers.
 // Also the global Alt shortcuts, which the editor keymap handles while it has focus.
 
 export function createTransport({ session }) {

@@ -297,6 +297,46 @@ button.capture {
   font-size: 15px;
   background: var(--accent);
 }
+#capture-panel .grid { margin-bottom: 8px; }
+#capture-panel select { max-width: 16ch; }
+#cap-fps-hint { font-size: 11px; }
+#capture-progress { display: block; width: 100%; margin-top: 6px; accent-color: var(--accent); }
+#capture-message { margin-top: 6px; color: #fc4; white-space: pre-wrap; }
+#capture-message:empty { display: none; }
+
+/* --- GIF preview overlay --- */
+
+#gif-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: #000b;
+  display: grid;
+  place-items: center;
+}
+.gif-box {
+  max-width: 92vw;
+  max-height: 92vh;
+  box-sizing: border-box;
+  padding: 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.gif-box header { display: flex; gap: 10px; align-items: center; }
+.gif-box header b { font-size: 16px; color: #fff; }
+#gif-warning { color: #fc4; }
+#gif-image {
+  min-height: 0;
+  max-width: 100%;
+  max-height: calc(92vh - 90px);
+  object-fit: contain;
+  align-self: center;
+  background: repeating-conic-gradient(#2a2a2a 0 25%, #333 0 50%) 0 0 / 20px 20px;
+}
 
 /* --- Right column: name, editor, status --- */
 

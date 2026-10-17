@@ -14,6 +14,8 @@ import { buildShareUrl, parseShareUrl } from './code/share.js'
 import { inkFraction } from './runner/sample.js'
 import { openLibrary } from './library/library.js'
 import { createLibraryController } from './app/libraryController.js'
+import { createCapturePanel } from './ui/capturePanel.js'
+import { createGifPreview } from './ui/gifPreview.js'
 
 const $ = id => document.getElementById(id)
 const settings = loadSettings()
@@ -51,7 +53,8 @@ async function boot() {
   }
 
   createTopbar({ session, editor, settings, saveSettings, actions: { ...library.actions, share } })
-  const transport = createTransport({ session }) // Task 11: transport.setScreenshotHandler / setCaptureHandler
+  const transport = createTransport({ session })
+  createCapturePanel({ session, settings, saveSettings, transport, preview: createGifPreview() })
   canvasPanel = createCanvasPanel({ session, settings, saveSettings, kv: lib })
   createStatusBar({ session, editor })
   createErrorBar({ session, errorEl: $('error-bar'), consoleEl: $('console-bar') })
