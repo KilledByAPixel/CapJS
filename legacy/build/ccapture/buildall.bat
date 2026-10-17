@@ -1,1 +1,0 @@
-uglifyjs webm-writer-0.2.0.js download.js tar.js gif.js CCapture.js --compress --mangle -o ../,,/CCapture.all.min.js
