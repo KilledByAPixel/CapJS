@@ -8,7 +8,8 @@ const MAX_QUEUE = 8 // frames waiting in the encoder before we wait for it
 
 // `frames` are ImageBitmaps or ImageData. VP9 needs even sizes, so width and
 // height are rounded down (the frames are cropped by a pixel when odd).
-export async function encodeWebm(frames, width, height, fps) {
+// An aborted `signal` stops encoding and rejects with its reason.
+export async function encodeWebm(frames, width, height, fps, signal) {
   if (typeof VideoEncoder === 'undefined') throw new Error('This browser cannot encode video (no WebCodecs).')
   const w = width & ~1, h = height & ~1
   const config = { codec: CODEC, width: w, height: h, framerate: fps, bitrate: Math.round(w * h * fps * 0.2) }
@@ -25,6 +26,7 @@ export async function encodeWebm(frames, width, height, fps) {
     encoder.configure(config)
     const duration = 1e6 / fps
     for (let i = 0; i < frames.length; i++) {
+      signal?.throwIfAborted()
       if (failure) throw failure
       while (encoder.encodeQueueSize > MAX_QUEUE) await new Promise(r => encoder.addEventListener('dequeue', r, { once: true }))
       const init = { timestamp: Math.round(i * duration), duration: Math.round(duration), visibleRect: { x: 0, y: 0, width: w, height: h } }
@@ -36,6 +38,7 @@ export async function encodeWebm(frames, width, height, fps) {
       frame.close()
     }
     await encoder.flush()
+    signal?.throwIfAborted()
     if (failure) throw failure
   } finally {
     if (encoder.state !== 'closed') encoder.close()

@@ -52,7 +52,7 @@ export function createCapturePanel({ session, settings, saveSettings, transport,
     input.addEventListener('change', () => read({ revert: true }))
   }
 
-  const fileName = ext => `${session.creation.name || 'capjs'}.${ext}`
+  const fileName = (ext, name = session.creation.name) => `${name || 'capjs'}.${ext}`
   const showMessage = text => { message.textContent = text ?? '' }
 
   let running = null // the AbortController of the capture in progress
@@ -61,22 +61,24 @@ export function createCapturePanel({ session, settings, saveSettings, transport,
     if (running) return running.abort() // the button cancels a running capture
     read({ revert: true })
     showMessage('')
-    running = new AbortController()
+    const run = running = new AbortController()
+    const name = session.creation.name // the creation captured, even if another is opened meanwhile
     button.textContent = '■ Cancel capture'
     progress.value = 0
     progress.hidden = false
     try {
       const result = await runCapture({
-        session, settings: { ...cap }, creationSettings: session.creationSettings, signal: running.signal,
+        session, settings: { ...cap }, creationSettings: session.creationSettings, signal: run.signal,
         onProgress({ phase, fraction }) {
           progress.value = phase === 'capture' ? fraction * 0.6 : 0.6 + fraction * 0.4
           progress.title = `${phase === 'capture' ? 'Capturing frames' : 'Encoding'}: ${Math.round(fraction * 100)}%`
         },
       })
-      if (result.format === 'gif') preview.open({ blob: result.blob, overLimit: result.overLimit, filename: fileName('gif') })
-      else downloadBlob(result.blob, fileName('webm'))
+      if (run.signal.aborted) return // cancelled as it finished
+      if (result.format === 'gif') preview.open({ blob: result.blob, overLimit: result.overLimit, filename: fileName('gif', name) })
+      else downloadBlob(result.blob, fileName('webm', name))
     } catch (e) {
-      if (!running.signal.aborted) {
+      if (!run.signal.aborted) {
         if (!e?.expected) console.error('Capture failed', e)
         showMessage(e?.message ?? String(e))
       }

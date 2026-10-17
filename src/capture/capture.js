@@ -24,6 +24,7 @@ function encodeGifInWorker(frames, { width, height, fps, dither, onProgress, sig
   const worker = new Worker(new URL('./gifWorker.js', import.meta.url), { type: 'module' })
   return new Promise((resolve, reject) => {
     const onAbort = () => reject(refusal('Capture cancelled'))
+    if (signal?.aborted) return onAbort() // an aborted signal never fires 'abort' again
     signal?.addEventListener('abort', onAbort, { once: true })
     worker.onmessage = ({ data }) => {
       if (data.type === 'progress') onProgress?.(data.fraction)
@@ -85,6 +86,7 @@ export async function runCapture({ session, settings: capture, creationSettings,
       frames.push(format === 'gif' ? ctx.getImageData(0, 0, width, height).data : await createImageBitmap(canvas))
       onProgress?.({ phase: 'capture', fraction: (k + 1) / targets.length })
     }
+    abortIfNeeded(signal) // cancelled during the last frame
     runner.destroy() // free it before encoding
     raw?.close()
     raw = null
@@ -95,8 +97,9 @@ export async function runCapture({ session, settings: capture, creationSettings,
       const gif = await encodeGifInWorker(frames.splice(0), { width, height, fps, dither, onProgress: encodeProgress, signal })
       blob = new Blob([gif], { type: 'image/gif' })
     } else {
-      blob = await encodeWebm(frames, width, height, fps)
+      blob = await encodeWebm(frames, width, height, fps, signal)
     }
+    abortIfNeeded(signal) // cancelled as encoding finished
     return { blob, format, bytes: blob.size, overLimit: format === 'gif' && blob.size > GIF_SIZE_LIMIT }
   } finally {
     for (const f of frames) f.close?.()

@@ -49,3 +49,35 @@ test('edits during a capture wait for it, then restart the live view once', asyn
   await expect(page.locator('#gif-preview')).toBeVisible({ timeout: 30000 })
   await expect.poll(() => page.evaluate(() => capjsDebug.sampleFrame())).toBeGreaterThan(0.95)
 })
+test('cancel during the last frame never delivers a result', async ({ page }) => {
+  for (const format of ['gif', 'webm']) {
+    const out = await page.evaluate(async format => {
+      const { runCapture } = await import('/CapJS/src/capture/capture.js')
+      const ctl = new AbortController()
+      const session = capjsDebug.session
+      try {
+        const r = await runCapture({
+          session, creationSettings: session.creationSettings, signal: ctl.signal,
+          settings: { format, width: 64, height: 36, seconds: 0.1, fps: 30, speed: 1, dither: 'fs', aspect: 'fill' },
+          onProgress: ({ phase, fraction }) => { if (phase === 'capture' && fraction === 1) ctl.abort() },
+        })
+        return `delivered ${r.blob.size} bytes`
+      } catch (e) { return e.message }
+    }, format)
+    expect(out, format).toBe('Capture cancelled')
+  }
+})
+test('a capture is named after the creation open when it started', async ({ page }) => {
+  await page.click('#editor .cm-content'); await page.keyboard.press('Control+A')
+  await page.keyboard.insertText('for(e=performance.now();performance.now()-e<30;);x.fillRect(0,0,99,99)')
+  const name = await page.evaluate(() => capjsDebug.session.creation.name)
+  await setCap(page, { width: 320, height: 180, seconds: 2 })
+  await page.selectOption('#cap-fps', '30')
+  await page.click('#btn-capture')
+  await expect(page.locator('#btn-capture')).toContainText('Cancel')
+  await page.click('#btn-fork') // opens "<name> fork" while capturing
+  await expect(page.locator('#creation-name')).toHaveValue(/ fork$/)
+  await expect(page.locator('#gif-preview')).toBeVisible({ timeout: 30000 })
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#btn-gif-download')])
+  expect(dl.suggestedFilename()).toBe(`${name}.gif`)
+})
