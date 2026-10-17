@@ -77,3 +77,22 @@ test('export resets backup counters; file name', async () => {
   expect(typeof await a.getKV('lastExportAt')).toBe('number')
   expect(backupFileName(new Date(2026, 9, 16, 12).getTime())).toBe('capjs-library-2026-10-16.json')
 })
+test('merge moving head copies mode, runMode and settings from the new head', async () => {
+  const a = await open(); const c = await a.createCreation(base)
+  const b = await open(); await importLibrary(b, await exportLibrary(a))
+  const settings = { ...c.settings, canvasWidth: 640 }
+  await a.saveVersion(c.id, { code: 'g', mode: 'js', runMode: 'page', settings, thumbnail: null })
+  await importLibrary(b, await exportLibrary(a))
+  const m = await b.getCreation(c.id)
+  expect([m.mode, m.runMode, m.settings.canvasWidth]).toEqual(['js', 'page', 640])
+})
+test('a malformed element anywhere means nothing is written', async () => {
+  const a = await open(); const c = await a.createCreation(base)
+  const file = await exportLibrary(a)
+  const b = await open()
+  const other = { ...file.creations[0], id: 'other' }
+  await expect(importLibrary(b, { ...file, creations: [file.creations[0], null] })).rejects.toThrow('Not a CapJS library file')
+  await expect(importLibrary(b, { ...file, creations: [file.creations[0], other], versions: [...file.versions, { id: 'v' }] })).rejects.toThrow('Not a CapJS library file')
+  expect(await b.listCreations({ includeDeleted: true })).toHaveLength(0)
+  expect(await b.raw.getAll('versions')).toHaveLength(0)
+})

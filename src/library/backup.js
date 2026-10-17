@@ -32,6 +32,13 @@ export async function importLibrary(lib, data) {
   if (!data || data.format !== FORMAT || !Array.isArray(data.creations) || !Array.isArray(data.versions)) {
     throw new Error('Not a CapJS library file')
   }
+  const isObj = v => v !== null && typeof v === 'object'
+  const str = v => typeof v === 'string'
+  const num = v => typeof v === 'number'
+  const bad = data.creations.some(c => !isObj(c) || !str(c.id)) ||
+    data.versions.some(v => !isObj(v) || !str(v.id) || !str(v.creationId) || !num(v.createdAt) || !num(v.n) || !str(v.code)) ||
+    (Array.isArray(data.tombstones) && data.tombstones.some(t => !isObj(t) || !str(t.id)))
+  if (bad) throw new Error('Not a CapJS library file')
   const incomingTombstones = Array.isArray(data.tombstones) ? data.tombstones : []
   // Decode thumbnails up front so the exclusive section is only IndexedDB work.
   const thumbs = new Map()
@@ -65,7 +72,7 @@ export async function importLibrary(lib, data) {
       const existing = local.get(inc.id)
       if (!existing) {
         for (const v of incVersions) await raw.put('versions', v)
-        await raw.put('creations', { ...inc, thumbnail: thumb })
+        await raw.put('creations', { ...inc, thumbnail: thumb, deletedAt: null })
         result.addedCreations++
         result.addedVersions += incVersions.length
         continue
@@ -79,12 +86,14 @@ export async function importLibrary(lib, data) {
       for (let i = 0; i < all.length; i++) {
         if (all[i].n !== i + 1) await raw.put('versions', { ...all[i], n: i + 1 })
       }
+      const head = all[all.length - 1]
       await raw.put('creations', {
         ...existing,
-        headVersionId: all[all.length - 1].id,
+        mode: head.mode, runMode: head.runMode, settings: head.settings,
+        headVersionId: head.id,
         versionCount: all.length,
         updatedAt: Math.max(existing.updatedAt, inc.updatedAt ?? 0),
-        thumbnail: thumb && (inc.updatedAt ?? 0) > existing.updatedAt ? thumb : existing.thumbnail,
+        thumbnail: thumb && (!existing.thumbnail || (inc.updatedAt ?? 0) > existing.updatedAt) ? thumb : existing.thumbnail,
       })
       result.addedVersions += fresh.length
     }
