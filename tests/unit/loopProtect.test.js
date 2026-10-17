@@ -25,3 +25,16 @@ test('a for-of does not swallow a following real loop', () => {
 test('custom guard', () => {
   expect(wrapLoops('while(1);', 'G()')).toBe('while(G(),1);')
 })
+test('unmatched loop-like text in a comment does not disable later protection', () => {
+  expect(() => run(wrapLoops('// see while (\nfor(;;);'), 1e5)).toThrow('Loop timed out')
+})
+test('loop-like text in strings and comments is not rewritten', () => {
+  const code = 'a="while(1)";b=\'for(;;)\';/* while(x) */'
+  expect(wrapLoops(code)).toBe(code)
+})
+test('a loop nested in a for head yields valid JS with both loops guarded', () => {
+  const out = wrapLoops('for(i=0;i<(()=>{while(x);return 1})();i++);')
+  expect(() => new Function('__lg', out)).not.toThrow()
+  expect(out.match(/__lg\(\)/g).length).toBe(2)
+  expect(run(wrapLoops('let n=0;for(let i=0;i<(()=>{let k=0;while(k<2)k++;return 3})();i++)n++;return n'), 1e5)).toBe(3)
+})
