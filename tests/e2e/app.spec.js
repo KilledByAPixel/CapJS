@@ -62,3 +62,38 @@ test('first run opens the help once', async ({ browser }) => {
   await expect(p.locator('#help-panel')).toBeHidden()
   await ctx.close()
 })
+// Ruling R23: live worker frames get 1500 ms (+250 ms grace), so slow but finite dweets keep
+// running. 1000 ms is past the old 500 + 250 ms kill.
+test('a slow but finite dweet frame is not stopped', async ({ page }) => {
+  await typeCode(page, 'for(e=performance.now();performance.now()-e<1000;);x.fillRect(0,0,1920,1080)')
+  await page.waitForTimeout(3000)
+  await expect(page.locator('#error-bar')).toBeHidden()
+  await expect.poll(() => ink(page)).toBeGreaterThan(0.95)
+  await expect(page.locator('#error-bar')).toBeHidden()
+})
+test('an html infinite loop is stopped and the page stays responsive', async ({ page }) => {
+  await typeCode(page, '<body>\n<script>for(;;);</script>')
+  await expect(page.locator('#error-bar')).toContainText('Loop timed out', { timeout: 5000 })
+  await expect(page.locator('#error-bar')).toContainText('Line 2')
+  await typeCode(page, 'x.fillRect(0,0,1920,1080)')
+  await expect.poll(() => ink(page)).toBeGreaterThan(0.95)
+})
+test('an image dropped on a page-mode canvas becomes the custom image', async ({ page }) => {
+  await typeCode(page, 'c.style.filter="none";x.fillRect(0,0,9,9)') // page mode: an iframe fills the host
+  await expect(page.locator('#canvas-host iframe')).toBeVisible()
+  await page.waitForTimeout(500)
+  const dropped = await page.evaluate(async () => {
+    const cv = new OffscreenCanvas(4, 4); cv.getContext('2d').fillRect(0, 0, 4, 4)
+    const dt = new DataTransfer(); dt.items.add(new File([await cv.convertToBlob()], 'dot.png', { type: 'image/png' }))
+    const fire = (target, type) => target.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt }))
+    fire(document.querySelector('#editor'), 'dragenter') // the drag comes in over the editor
+    const r = document.querySelector('#canvas-host').getBoundingClientRect()
+    let target = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)
+    if (target.tagName === 'IFRAME') target = target.contentDocument.body // the browser delivers it inside the frame
+    fire(target, 'dragenter'); fire(target, 'dragover'); fire(target, 'drop')
+    return target.id || target.tagName
+  })
+  expect(dropped).toBe('drop-overlay')
+  await expect(page.locator('#image-name')).toHaveText('dot.png')
+  await expect(page.locator('#drop-overlay')).toBeHidden()
+})

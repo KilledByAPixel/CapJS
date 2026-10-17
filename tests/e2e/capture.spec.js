@@ -32,3 +32,20 @@ test('WebM and screenshot download', async ({ page }) => {
   const [png] = await Promise.all([page.waitForEvent('download'), page.click('#btn-screenshot')])
   expect(png.suggestedFilename()).toMatch(/\.png$/)
 })
+test('edits during a capture wait for it, then restart the live view once', async ({ page }) => {
+  const typeCode = async code => { await page.click('#editor .cm-content'); await page.keyboard.press('Control+A'); await page.keyboard.insertText(code) }
+  await typeCode('for(e=performance.now();performance.now()-e<30;);x.fillRect(0,0,99,99)') // slow frames: a long capture
+  await expect.poll(() => page.evaluate(() => capjsDebug.session.state.step)).toBeGreaterThan(0)
+  await setCap(page, { width: 320, height: 180, seconds: 2 })
+  await page.selectOption('#cap-fps', '30')
+  await page.click('#btn-capture')
+  await expect(page.locator('#btn-capture')).toContainText('Cancel')
+  const step = await page.evaluate(() => capjsDebug.session.state.step)
+  await typeCode('x.fillRect(0,0,1920,1080)')
+  await page.evaluate(() => { capjsDebug.session.step(); capjsDebug.session.seek(99) })
+  await page.waitForTimeout(500) // past the change debounce
+  await expect(page.locator('#btn-capture')).toContainText('Cancel') // still capturing
+  expect(await page.evaluate(() => capjsDebug.session.state.step)).toBe(step)
+  await expect(page.locator('#gif-preview')).toBeVisible({ timeout: 30000 })
+  await expect.poll(() => page.evaluate(() => capjsDebug.sampleFrame())).toBeGreaterThan(0.95)
+})

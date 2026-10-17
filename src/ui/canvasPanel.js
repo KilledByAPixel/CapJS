@@ -1,6 +1,9 @@
 // Canvas panel (background, capture aspect, custom image, canvas size), the
 // canvas host's image drop target, and the safe-start overlay.
 //
+// While a file is dragged over the window, a transparent overlay covers the host,
+// so the drop lands on it even when a page-mode iframe fills the host.
+//
 // `kv` ({getKV, setKV}, e.g. the library) persists the custom image as kv.lastImage;
 // without it the image lasts only for this page.
 
@@ -8,7 +11,7 @@ const MAX_CANVAS = 8192
 
 export function createCanvasPanel({ session, settings, saveSettings, kv = null }) {
   const $ = id => document.getElementById(id)
-  const host = $('canvas-host'), safeStart = $('safe-start')
+  const host = $('canvas-host'), safeStart = $('safe-start'), dropOverlay = $('drop-overlay')
   const bgEnabled = $('bg-enabled'), bgColor = $('bg-color'), aspect = $('cap-aspect')
   const imageInput = $('image-input'), imageName = $('image-name'), imageClear = $('btn-image-clear')
   const width = $('canvas-width'), height = $('canvas-height')
@@ -76,6 +79,24 @@ export function createCanvasPanel({ session, settings, saveSettings, kv = null }
   })
 
   const isFileDrag = e => [...(e.dataTransfer?.types ?? [])].includes('Files')
+
+  // dragenter/dragleave fire for every element crossed, so count them.
+  let dragDepth = 0
+  const endDrag = () => {
+    dragDepth = 0
+    dropOverlay.hidden = true
+    host.classList.remove('drop-target')
+  }
+  window.addEventListener('dragenter', e => {
+    if (!isFileDrag(e)) return
+    dragDepth++
+    dropOverlay.hidden = false
+  })
+  window.addEventListener('dragleave', e => {
+    if (isFileDrag(e) && --dragDepth <= 0) endDrag()
+  })
+  window.addEventListener('drop', endDrag)
+  window.addEventListener('dragend', endDrag)
   host.addEventListener('dragover', e => {
     if (!isFileDrag(e)) return
     e.preventDefault()
@@ -83,7 +104,7 @@ export function createCanvasPanel({ session, settings, saveSettings, kv = null }
   })
   host.addEventListener('dragleave', () => host.classList.remove('drop-target'))
   host.addEventListener('drop', e => {
-    host.classList.remove('drop-target')
+    endDrag()
     const file = [...(e.dataTransfer?.files ?? [])].find(f => f.type.startsWith('image/'))
     if (!file) return
     e.preventDefault()

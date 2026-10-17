@@ -38,7 +38,8 @@ export function createSession({ container, editor, clock, settings, library = nu
   let error = null, consoleText = ''
   let pausedByError = false
   let safeStart = false
-  let suspended = false
+  let suspended = false // a capture is running: nothing drives the live runner
+  let restartPending = false // a restart asked for while suspended, run on resume
   let image = null
   let changeTimer = null, draftTimer = null
 
@@ -158,6 +159,11 @@ export function createSession({ container, editor, clock, settings, library = nu
   async function restart() {
     flushDraft() // stored before the code runs, in case it hangs the page
     clearTimeout(changeTimer)
+    if (suspended) {
+      generation++ // a reply still in flight is for the old code
+      restartPending = true
+      return
+    }
     setSafeStart(false)
     const gen = ++generation
     const token = busy = {}
@@ -166,22 +172,23 @@ export function createSession({ container, editor, clock, settings, library = nu
     clock.reset()
     lastStep = -1
     consoleText = ''
+    // Without time (html, js, littlejs) the old error goes now: errors raised while
+    // the page loads arrive as async errors before the load replies, and must stay.
+    // With time, the next successful frame clears it.
+    if (!r.supportsTime) setError(null)
     emitState()
-    const result = await r.load(code, { loopProtect: r.runMode === 'page' && r.mode !== 'html' })
+    const result = await r.load(code, { loopProtect: r.runMode === 'page' })
     if (busy === token) busy = null
     if (gen !== generation) return
     addConsole(result.console)
     if (result.error) setError(result.error)
-    else {
-      if (!r.supportsTime) setError(null) // otherwise the next successful frame clears it
-      clock.playing = r.supportsTime
-    }
+    else clock.playing = r.supportsTime
     emitState()
   }
 
   // Runs steps on the current runner. Never skipped: step and seek call it directly.
   async function run(steps) {
-    if (!runner?.supportsTime || safeStart || !steps.length) return
+    if (suspended || !runner?.supportsTime || safeStart || !steps.length) return
     const gen = generation, r = runner
     const token = busy = {}
     const result = await r.runFrames(steps, { budgetMs: r.runMode === 'worker' ? WORKER_BUDGET_MS : PAGE_BUDGET_MS })
@@ -195,7 +202,7 @@ export function createSession({ container, editor, clock, settings, library = nu
   }
 
   async function rebuild() {
-    if (safeStart || !runner?.supportsTime || runner.dead || wantedKey() !== runnerKey) return restart()
+    if (suspended || safeStart || !runner?.supportsTime || runner.dead || wantedKey() !== runnerKey) return restart()
     flushDraft() // stored before the code runs, in case it hangs the page
     const gen = generation, r = runner
     const wasPausedByError = pausedByError
@@ -292,14 +299,14 @@ export function createSession({ container, editor, clock, settings, library = nu
     },
 
     step() {
-      if (safeStart || !runner?.supportsTime) return
+      if (suspended || safeStart || !runner?.supportsTime) return
       const steps = clock.step()
       emitState()
       return run(steps)
     },
 
     seek(i) {
-      if (safeStart || !runner?.supportsTime) return
+      if (suspended || safeStart || !runner?.supportsTime) return
       return run(clock.seek(i))
     },
 
@@ -368,9 +375,15 @@ export function createSession({ container, editor, clock, settings, library = nu
       return restart()
     },
 
-    // Capture suspends the live loop while it runs its own runner.
+    // Capture suspends the live view while it runs its own runner: code changes,
+    // steps and seeks leave the live runner alone, and a restart asked for meanwhile
+    // runs once on resume.
     suspendLive(on) {
       suspended = !!on
+      if (!suspended && restartPending) {
+        restartPending = false
+        restart()
+      }
     },
 
     getRunner: () => runner,

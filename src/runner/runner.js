@@ -6,10 +6,12 @@
 import { CANVAS_MODES, errorInfo } from './protocol.js'
 import { resolveRunMode } from '../code/detect.js'
 
-export const WORKER_BUDGET_MS = 500
+// Live worker requests (ruling R23): slow but finite frames keep running.
+export const WORKER_BUDGET_MS = 1500
 export const PAGE_BUDGET_MS = 200
 export const CAPTURE_BUDGET_MS = 10000
 
+const FRAMES_BUDGET_MS = 500 // runFrames' default when the caller gives no budget
 const LOAD_BUDGET_MS = 5000 // three.js import plus setup can take a while; also the frame's ready wait
 // The watchdog fires this long after a request's budget, so a loop-protected
 // program can stop itself and reply before the worker is killed.
@@ -233,7 +235,7 @@ export function createRunner({ container, mode, runMode, width, height, backgrou
       return request({ type: 'setCode', code }, WORKER_BUDGET_MS).then(({ error, console }) => ({ error, console }))
     },
 
-    runFrames(frames, { budgetMs = WORKER_BUDGET_MS, grab = false } = {}) {
+    runFrames(frames, { budgetMs = FRAMES_BUDGET_MS, grab = false } = {}) {
       return request({ type: 'frames', frames, budgetMs, grab }, budgetMs)
         .then(({ error, console, bitmap }) => ({ error, console, bitmap: bitmap ?? null }))
     },

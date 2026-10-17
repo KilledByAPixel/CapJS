@@ -239,6 +239,8 @@ select, input[type="text"], input[type="number"] {
   background: repeating-conic-gradient(#2a2a2a 0 25%, #333 0 50%) 0 0 / 20px 20px;
 }
 #canvas-host.drop-target { outline: 3px dashed var(--accent); outline-offset: -3px; }
+/* Shown during a file drag so drops reach the host even when a page-mode iframe fills it. */
+#drop-overlay { position: absolute; inset: 0; z-index: 2; background: transparent; }
 
 #safe-start {
   position: absolute;

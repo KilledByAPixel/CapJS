@@ -3,12 +3,13 @@
 
 import { createRuntime } from './runtime.js'
 import { CANVAS_MODES, errorInfo, makeReply, transferList } from './protocol.js'
-import { wrapLoops } from '../code/loopProtect.js'
+import { wrapLoops, wrapHtmlScripts } from '../code/loopProtect.js'
 import { parseErrorLine } from '../code/errors.js'
 import littlejsUrl from 'littlejsengine/dist/littlejs.js?url'
 
 const JS_BUDGET_MS = 2000
 const LITTLEJS_BUDGET_MS = 200
+const HTML_BUDGET_MS = 200
 const LOOP_CHECK_MASK = 1023 // check the clock every 1024 guard calls
 const GRAB_TIMEOUT_MS = 1000
 
@@ -23,7 +24,7 @@ const indirectEval = (0, eval)
 
 const post = (msg, transfer = []) => parent.postMessage(msg, '*', transfer)
 
-// --- Loop guard for js and littlejs (canvas modes use the runtime's own) ---
+// --- Loop guard for js, littlejs and html (canvas modes use the runtime's own) ---
 
 let deadline = Infinity, guardCalls = 0, deadlineBudget = 0, ticking = false
 
@@ -50,7 +51,7 @@ function keepDeadline(budgetMs) {
 function errorLine(event) {
   // Inline user scripts report lineno directly; errors raised inside the engine script itself have no editor line.
   if (mode === 'littlejs') return event.filename && event.filename !== location.href ? null : event.lineno
-  if (mode === 'html') return htmlLine(event.lineno)
+  if (mode === 'html') return htmlLine(userLineno(event))
   if (mode === 'js') return parseErrorLine(event.error?.stack, 0)
   return parseErrorLine(event.error?.stack)
 }
@@ -59,7 +60,21 @@ function errorLine(event) {
 // script's own start. While a script runs it is document.currentScript, so add
 // the line its text starts on in the user's code.
 let htmlCode = ''
+
+// The loop guard throws from this file, so the event's line is ours: take the
+// first stack frame outside it (the user's script) instead.
+function userLineno(event) {
+  if (event.filename !== import.meta.url || !event.error?.stack) return event.lineno
+  for (const frame of event.error.stack.split('\n').slice(1)) {
+    if (frame.includes(import.meta.url)) continue
+    const m = /:(\d+):\d+\)?\s*$/.exec(frame)
+    return m ? Number(m[1]) : null
+  }
+  return null
+}
+
 function htmlLine(lineno) {
+  if (lineno == null) return null
   const script = document.currentScript
   const at = script && !script.src ? htmlCode.indexOf(script.text) : -1
   return at < 0 ? lineno : htmlCode.slice(0, at).split('\n').length - 1 + lineno
@@ -96,11 +111,15 @@ async function loadCanvas(msg) {
   return runtime.handle(msg)
 }
 
+// Inline scripts are loop-protected; wrapLoops keeps every newline, so error lines still match.
 function loadHtml(msg) {
-  htmlCode = msg.code
+  htmlCode = msg.loopProtect ? wrapHtmlScripts(msg.code) : msg.code
   document.open()
   installListeners() // document.open erased them; reinstall before the user's scripts run
-  document.write(msg.code)
+  window.__lg = pageGuard
+  guardCalls = 0
+  keepDeadline(HTML_BUDGET_MS)
+  document.write(htmlCode)
   document.close()
   return makeReply(msg.id)
 }

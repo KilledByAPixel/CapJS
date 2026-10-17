@@ -59,3 +59,17 @@ export function wrapLoops(code, guard = '__lg()') {
   }
   return out + code.slice(last)
 }
+
+// Script types that hold JavaScript; any other type (e.g. a shader) is data.
+const JS_TYPE = /^(|module|(text|application)\/(java|ecma)script)$/i
+
+// Applies wrapLoops to the bodies of inline JavaScript <script> elements in an
+// HTML document. Scripts with src, other script types and markup are left alone.
+export function wrapHtmlScripts(html, guard = '__lg()') {
+  return html.replace(/(<script\b([^>]*)>)([\s\S]*?)(<\/script\s*>)/gi, (all, open, attrs, body, close) => {
+    if (/\bsrc\s*=/i.test(attrs)) return all
+    const type = /\btype\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrs)
+    if (type && !JS_TYPE.test((type[1] ?? type[2] ?? type[3]).trim())) return all
+    return open + wrapLoops(body, guard) + close
+  })
+}

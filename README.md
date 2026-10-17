@@ -48,7 +48,7 @@ One-time setup:
 1. Create a GitHub repository named `CapJS` and push this project to it.
 2. Go to Settings → Pages → Source and choose "GitHub Actions".
 
-After that, every push to `main` builds and deploys the site via `.github/workflows/deploy.yml`.
+After that, every push to `main` or `master` builds and deploys the site via `.github/workflows/deploy.yml`. It can also be run by hand from the Actions tab (workflow_dispatch).
 
 The `base` option in `vite.config.js` (`/CapJS/`) must match the repository name, or be changed to `/` when using a custom domain.
 

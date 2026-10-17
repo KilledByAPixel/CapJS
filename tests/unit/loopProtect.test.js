@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest'
-import { wrapLoops } from '../../src/code/loopProtect.js'
+import { wrapLoops, wrapHtmlScripts } from '../../src/code/loopProtect.js'
 const run = (code, limit) => { let n = 0; const __lg = () => { if (++n > limit) throw Error('Loop timed out') }; return new Function('__lg', code)(__lg) }
 test('infinite loops of each kind throw', () => {
   for (const code of ['for(;;){}', 'for(i=0;i<9;i--);', 'while(1)x=1', 'do{}while(true)', 'for(i=0;;)i++'])
@@ -37,4 +37,13 @@ test('a loop nested in a for head yields valid JS with both loops guarded', () =
   expect(() => new Function('__lg', out)).not.toThrow()
   expect(out.match(/__lg\(\)/g).length).toBe(2)
   expect(run(wrapLoops('let n=0;for(let i=0;i<(()=>{let k=0;while(k<2)k++;return 3})();i++)n++;return n'), 1e5)).toBe(3)
+})
+test('html: inline JS script bodies are wrapped; src, non-JS types and markup are not', () => {
+  const html = '<p>for(;;) while(1)</p>\n<script>for(;;);</script>\n<SCRIPT type="module">\nwhile(1){}\n</SCRIPT>' +
+    '<script src="a.js">for(;;);</script><script type="x-shader/x-fragment">for(int i=0;i<9;i++){}</script>'
+  const out = wrapHtmlScripts(html)
+  expect(out).toBe('<p>for(;;) while(1)</p>\n<script>for(;;__lg());</script>\n<SCRIPT type="module">\nwhile(__lg(),1){}\n</SCRIPT>' +
+    '<script src="a.js">for(;;);</script><script type="x-shader/x-fragment">for(int i=0;i<9;i++){}</script>')
+  expect(out.split('\n').length).toBe(html.split('\n').length)
+  expect(wrapHtmlScripts('<script type="text/javascript">for(;;){}</script>')).toBe('<script type="text/javascript">for(;;__lg()){}</script>')
 })
