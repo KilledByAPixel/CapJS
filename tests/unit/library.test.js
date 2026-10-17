@@ -101,3 +101,27 @@ test('kv and raw helpers', async () => {
   await lib.raw.del('creations', 'orig')
   expect(await lib.raw.get('creations', 'orig')).toBeNull()
 })
+test('overlapping saves get distinct n and count every save', async () => {
+  const lib = await open()
+  const c = await lib.createCreation(base)
+  const a = (code) => ({ code, mode: 'dweet', runMode: 'auto', settings: c.settings, thumbnail: null })
+  const [v2, v3] = await Promise.all([lib.saveVersion(c.id, a('b')), lib.saveVersion(c.id, a('c'))])
+  expect([v2.n, v3.n]).toEqual([2, 3])
+  expect(await lib.getKV('savesSinceExport')).toBe(2)
+  expect((await lib.getCreation(c.id)).versionCount).toBe(3)
+})
+test('rename racing a save keeps the save head; failures do not jam the queue', async () => {
+  const lib = await open()
+  const c = await lib.createCreation(base)
+  const [v2] = await Promise.all([
+    lib.saveVersion(c.id, { code: 'b', mode: 'dweet', runMode: 'auto', settings: c.settings, thumbnail: null }),
+    lib.rename(c.id, 'new'),
+  ])
+  const cur = await lib.getCreation(c.id)
+  expect(cur.headVersionId).toBe(v2.id)
+  expect(cur.name).toBe('new')
+  await expect(lib.rename('missing', 'x')).rejects.toThrow()
+  await expect(lib.setDraft('missing', { code: '', mode: 'dweet', runMode: 'auto', settings: c.settings })).rejects.toThrow()
+  await lib.rename(c.id, 'after')
+  expect((await lib.getCreation(c.id)).name).toBe('after')
+})

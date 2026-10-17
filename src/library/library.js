@@ -12,6 +12,14 @@ export async function openLibrary({ dbName = 'capjs', now = Date.now } = {}) {
   const clone = v => structuredClone(v)
   let persistRequested = false
 
+  // Serialize all mutations so read-modify-write cycles never interleave.
+  let queue = Promise.resolve()
+  const serial = fn => (...args) => {
+    const run = queue.then(() => fn(...args))
+    queue = run.catch(() => {})
+    return run
+  }
+
   const requireRecord = async (store, key) => {
     const rec = await get(db, store, key)
     if (!rec) throw new Error(`${store} record not found: ${key}`)
@@ -27,7 +35,7 @@ export async function openLibrary({ dbName = 'capjs', now = Date.now } = {}) {
   }
 
   const getKV = async key => (await get(db, 'kv', key))?.value ?? null
-  const setKV = (key, value) => put(db, 'kv', { key, value })
+  const setKV = serial((key, value) => put(db, 'kv', { key, value }))
 
   const getCreation = key => get(db, 'creations', key)
   const getVersion = key => get(db, 'versions', key)
@@ -98,9 +106,11 @@ export async function openLibrary({ dbName = 'capjs', now = Date.now } = {}) {
     await put(db, 'creations', { ...c, name, updatedAt: now() })
   }
 
-  const setDraft = (creationId, { code, mode, runMode, settings }) =>
-    put(db, 'drafts', { creationId, code, mode, runMode, settings: clone(settings), updatedAt: now() })
-  const discardDraft = creationId => del(db, 'drafts', creationId)
+  const setDraft = serial(async (creationId, { code, mode, runMode, settings }) => {
+    await requireRecord('creations', creationId)
+    await put(db, 'drafts', { creationId, code, mode, runMode, settings: clone(settings), updatedAt: now() })
+  })
+  const discardDraft = serial(creationId => del(db, 'drafts', creationId))
 
   async function listCreations({ includeDeleted = false } = {}) {
     const all = await getAll(db, 'creations')
@@ -140,9 +150,11 @@ export async function openLibrary({ dbName = 'capjs', now = Date.now } = {}) {
   }
 
   return {
-    listCreations, getCreation, createCreation, saveVersion, listVersions, getVersion,
-    fork, rename, setDraft, getDraft, discardDraft,
-    deleteCreation, restoreCreation, purgeCreation, listTombstones,
+    listCreations, getCreation, createCreation: serial(createCreation),
+    saveVersion: serial(saveVersion), listVersions, getVersion,
+    fork: serial(fork), rename: serial(rename), setDraft, getDraft, discardDraft,
+    deleteCreation: serial(deleteCreation), restoreCreation: serial(restoreCreation),
+    purgeCreation: serial(purgeCreation), listTombstones,
     getKV, setKV, raw,
   }
 }
