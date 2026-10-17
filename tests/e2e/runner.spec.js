@@ -120,3 +120,63 @@ test('a destroyed runner answers immediately and leaves no element behind', asyn
   })
   expect(res).toEqual({ error: 'Runner destroyed', attached: false })
 })
+
+test('releasing the mouse outside the element clears iMouse zw', async ({ page }) => {
+  await run(page, async () => {
+    document.body.style.cssText = 'margin:0;width:320px;height:180px'
+    window.r = harness.createRunner({ container: document.body, mode: 'shadertoy', runMode: 'worker', width: 320, height: 180, background: null })
+    await r.load('void mainImage(out vec4 c, in vec2 p){c=iMouse.z>0.?vec4(1,0,0,1):vec4(1);}', { loopProtect: false })
+  })
+  await page.mouse.move(80, 45)
+  await page.mouse.down()
+  for (let x = 90; x < 600; x += 30) await page.mouse.move(x, 300)
+  const down = await run(page, async () => { await r.runFrames([0]); return harness.sample(r) })
+  await page.mouse.up()
+  const up = await run(page, async () => { await r.runFrames([1]); return harness.sample(r) })
+  expect(down).toBe(1)
+  expect(up).toBe(0)
+})
+
+test('page-mode destroy during load settles the load and later calls promptly', async ({ page }) => {
+  const res = await run(page, async () => {
+    const r = harness.createRunner({ container: document.body, mode: 'dweet', runMode: 'page', width: 320, height: 180, background: null })
+    const loading = r.load('x.fillRect(0,0,9,9)', { loopProtect: true })
+    while (!r.element.querySelector('iframe')) await new Promise(res => setTimeout(res)) // waiting for ready now
+    const t0 = performance.now()
+    r.destroy()
+    const load = (await loading).error?.message
+    const frames = (await r.runFrames([0])).error?.message
+    return { load, frames, dt: performance.now() - t0 }
+  })
+  expect(res).toMatchObject({ load: 'Runner destroyed', frames: 'Runner destroyed' })
+  expect(res.dt).toBeLessThan(200)
+})
+
+test('destroy while a worker runFrames is in flight resolves it', async ({ page }) => {
+  const res = await run(page, async () => {
+    const r = harness.createRunner({ container: document.body, mode: 'dweet', runMode: 'worker', width: 320, height: 180, background: null })
+    await r.load('for(;;){}', { loopProtect: false })
+    const running = r.runFrames([0])
+    await new Promise(res => setTimeout(res, 50))
+    const t0 = performance.now()
+    r.destroy()
+    const out = await running
+    return { error: out.error?.message, dt: performance.now() - t0 }
+  })
+  expect(res.error).toBe('Runner destroyed')
+  expect(res.dt).toBeLessThan(100)
+})
+
+test('a request that cannot be posted fails alone and never kills a later worker', async ({ page }) => {
+  const res = await run(page, async () => {
+    const r = harness.createRunner({ container: document.body, mode: 'dweet', runMode: 'worker', width: 320, height: 180, background: null })
+    await r.load('x.fillRect(0,0,320,180)', { loopProtect: false })
+    const bad = await r.runFrames([() => {}])
+    await r.load('x.fillRect(0,0,320,180)', { loopProtect: false })
+    await new Promise(res => setTimeout(res, 1000)) // past any stray watchdog for the bad request
+    const ok = await r.runFrames([0])
+    return { bad: bad.error?.message ?? null, dead: r.dead, ok: ok.error }
+  })
+  expect(res.bad).toMatch(/could not be cloned/)
+  expect(res).toMatchObject({ dead: false, ok: null })
+})

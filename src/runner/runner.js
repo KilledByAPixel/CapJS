@@ -10,7 +10,7 @@ export const WORKER_BUDGET_MS = 500
 export const PAGE_BUDGET_MS = 200
 export const CAPTURE_BUDGET_MS = 10000
 
-const LOAD_BUDGET_MS = 5000 // three.js import plus setup can take a while
+const LOAD_BUDGET_MS = 5000 // three.js import plus setup can take a while; also the frame's ready wait
 // The watchdog fires this long after a request's budget, so a loop-protected
 // program can stop itself and reply before the worker is killed.
 const WATCHDOG_GRACE_MS = 250
@@ -18,11 +18,10 @@ const FRAME_URL = import.meta.env.BASE_URL + 'frame.html'
 
 let nextId = 1 // unique across runners, so a reply can never match another request
 
-const timeoutError = budgetMs => ({
-  message: `Stopped: a frame took longer than ${budgetMs} ms (infinite loop?)`,
-  line: null,
-  timedOut: true,
-})
+const timedOut = message => ({ message, line: null, timedOut: true })
+const frameTimeout = budgetMs => timedOut(`Stopped: a frame took longer than ${budgetMs} ms (infinite loop?)`)
+const setupTimeout = budgetMs => timedOut(`Stopped: setup took longer than ${budgetMs} ms`)
+const destroyedError = () => errorInfo('Runner destroyed')
 
 export function createRunner({ container, mode, runMode, width, height, background = null }) {
   runMode = resolveRunMode(mode, runMode, '')
@@ -35,7 +34,7 @@ export function createRunner({ container, mode, runMode, width, height, backgrou
   let worker = null, canvas = null, iframe = null
   let dead = false, deadError = null, destroyed = false
   let image = null
-  let frameReady = null // resolves when the current iframe posts ready
+  let settleReady = null // settles the current frame's ready wait with {error}
   const pending = new Map() // id -> settle(reply)
   const asyncErrorFns = []
 
@@ -66,36 +65,41 @@ export function createRunner({ container, mode, runMode, width, height, backgrou
     if (!iframe || event.source !== iframe.contentWindow) return
     const msg = event.data
     if (msg?.type === 'reply') onReply(msg)
-    else if (msg?.type === 'ready') frameReady?.resolve()
+    else if (msg?.type === 'ready') settleReady?.({ error: null })
     else if (msg?.type === 'error') reportAsync(msg.error)
   }
   if (!inWorker) window.addEventListener('message', onWindowMessage)
 
   // Sends one request and resolves with its reply. In worker mode a watchdog
   // kills the worker if the reply doesn't arrive in time.
-  function send(msg, budgetMs, transfer = []) {
+  function send(msg, budgetMs, transfer = [], timeoutError = frameTimeout) {
+    if (destroyed) return Promise.resolve({ error: destroyedError(), console: '' })
     const id = nextId++
     return new Promise(resolve => {
+      try {
+        if (inWorker) worker.postMessage({ ...msg, id }, transfer)
+        else iframe.contentWindow.postMessage({ ...msg, id }, '*', transfer)
+      } catch (e) { // e.g. a DataCloneError: nothing was sent, so nothing to wait for
+        resolve({ error: errorInfo(e?.message ?? e), console: '' })
+        return
+      }
       let timer = null
       pending.set(id, reply => { clearTimeout(timer); resolve(reply) })
       if (inWorker) {
         timer = setTimeout(() => {
           pending.delete(id)
-          kill(budgetMs)
+          kill(timeoutError(budgetMs))
           resolve({ error: deadError, console: '' })
         }, budgetMs + WATCHDOG_GRACE_MS)
-        worker.postMessage({ ...msg, id }, transfer)
-      } else {
-        iframe.contentWindow.postMessage({ ...msg, id }, '*', transfer)
       }
     })
   }
 
-  function kill(budgetMs) {
+  function kill(error) {
     stopWorker()
     newCanvas() // the old canvas belongs to the dead worker
     dead = true
-    deadError = timeoutError(budgetMs)
+    deadError = error
   }
 
   function stopWorker() {
@@ -113,18 +117,21 @@ export function createRunner({ container, mode, runMode, width, height, backgrou
   }
 
   const failure = () =>
-    destroyed ? errorInfo('Runner destroyed')
+    destroyed ? destroyedError()
       : dead ? deadError
         : !(worker || iframe) ? errorInfo('No program loaded')
           : null
 
+  const attempt = (msg, budgetMs, transfer) =>
+    failure() ? { error: failure(), console: '' } : send(msg, budgetMs, transfer)
+
   function request(msg, budgetMs, transfer) {
-    return enqueue(() => failure() ? { error: failure(), console: '' } : send(msg, budgetMs, transfer))
+    return enqueue(() => attempt(msg, budgetMs, transfer))
   }
 
   // --- Loading: always a fresh worker and canvas, or a fresh frame.html ---
 
-  async function startWorker() {
+  function startWorker() {
     stopWorker()
     newCanvas()
     const offscreen = canvas.transferControlToOffscreen()
@@ -133,62 +140,83 @@ export function createRunner({ container, mode, runMode, width, height, backgrou
     worker.onerror = e => { e.preventDefault(); reportAsync(errorInfo(e.message || 'Worker error')) }
     dead = false
     deadError = null
-    return send({ type: 'init', canvas: offscreen }, LOAD_BUDGET_MS, [offscreen])
+    return send({ type: 'init', canvas: offscreen }, LOAD_BUDGET_MS, [offscreen], setupTimeout)
   }
 
+  // Resolves {error} once the new frame posts ready, fails to within
+  // LOAD_BUDGET_MS, or the runner is destroyed. A failed frame is removed.
   async function startFrame() {
     pending.clear()
-    let resolve
-    frameReady = new Promise(r => { resolve = r })
-    frameReady.resolve = resolve
-    const ready = frameReady
     iframe = document.createElement('iframe')
     iframe.sandbox = 'allow-scripts allow-same-origin'
     iframe.style.cssText = 'display:block;width:100%;height:100%;border:0'
+    const ready = new Promise(resolve => {
+      const timer = setTimeout(() => settleReady({ error: errorInfo('Runner page failed to load') }), LOAD_BUDGET_MS)
+      settleReady = result => { clearTimeout(timer); settleReady = null; resolve(result) }
+    })
     iframe.src = FRAME_URL
     element.replaceChildren(iframe)
-    await ready
-    if (CANVAS_MODES.includes(mode)) listenForMouse(iframe.contentWindow)
-    return { error: null }
+    const result = await ready
+    if (result.error) {
+      iframe?.remove()
+      iframe = null
+    } else if (CANVAS_MODES.includes(mode)) {
+      listenForMouse(iframe.contentWindow)
+    }
+    return result
   }
 
   function load(code, { loopProtect = false } = {}) {
     return enqueue(async () => {
-      if (destroyed) return { error: errorInfo('Runner destroyed'), console: '' }
+      if (destroyed) return { error: destroyedError() }
       const started = await (inWorker ? startWorker() : startFrame())
       if (started.error) return started
       if (image) {
         const r = await send({ type: 'image', bitmap: image }, WORKER_BUDGET_MS)
         if (r.error) return r
       }
-      return send({ type: 'load', mode, code, width, height, background, loopProtect }, LOAD_BUDGET_MS)
-    }).then(({ error, console }) => ({ error, console }))
+      return send({ type: 'load', mode, code, width, height, background, loopProtect }, LOAD_BUDGET_MS, [], setupTimeout)
+    }).then(({ error, console = '' }) => ({ error, console }))
   }
 
   // --- Mouse: Shadertoy iMouse in canvas pixels, y up ---
 
   let mouse = [0, 0, 0, 0]
-  const mouseHandlers = {
-    mousedown(e, p) { mouse = [p[0], p[1], p[0], p[1]] },
-    mousemove(e, p) { if (e.buttons) mouse = [p[0], p[1], mouse[2], mouse[3]]; else return false },
-    mouseup() { mouse = [mouse[0], mouse[1], 0, 0] },
-  }
 
   // `target` is the display element (worker mode) or the frame's window (page mode).
   function listenForMouse(target) {
-    for (const [type, update] of Object.entries(mouseHandlers)) {
-      target.addEventListener(type, e => {
-        const isWindow = target === target.window
-        const rect = isWindow ? { left: 0, top: 0, width: target.innerWidth, height: target.innerHeight } : target.getBoundingClientRect()
-        const p = [(e.clientX - rect.left) * width / rect.width, (rect.top + rect.height - e.clientY) * height / rect.height]
-        if (update(e, p) !== false) setMouse(...mouse)
-      })
+    const at = e => {
+      const isWindow = target === target.window
+      const rect = isWindow ? { left: 0, top: 0, width: target.innerWidth, height: target.innerHeight } : target.getBoundingClientRect()
+      return [(e.clientX - rect.left) * width / rect.width, (rect.top + rect.height - e.clientY) * height / rect.height]
     }
+    target.addEventListener('mousedown', e => {
+      const [x, y] = at(e)
+      setMouse(x, y, x, y)
+    })
+    target.addEventListener('mousemove', e => {
+      if (e.buttons) setMouse(...at(e), mouse[2], mouse[3])
+    })
+    if (target !== element) target.addEventListener('mouseup', onMouseUp)
   }
+
+  // On the main window too, so a release outside the element still clears zw.
+  function onMouseUp() {
+    if (mouse[2] || mouse[3]) setMouse(mouse[0], mouse[1], 0, 0)
+  }
+  window.addEventListener('mouseup', onMouseUp)
   if (inWorker) listenForMouse(element)
 
+  // Mouse sends are coalesced: at most one is queued, and it carries the latest state.
+  let mouseQueued = null
   function setMouse(x, y, z, w) {
-    return request({ type: 'mouse', x, y, z, w }, WORKER_BUDGET_MS)
+    mouse = [x, y, z, w]
+    mouseQueued ??= enqueue(() => {
+      mouseQueued = null // later changes queue a new send
+      const [x, y, z, w] = mouse
+      return attempt({ type: 'mouse', x, y, z, w }, WORKER_BUDGET_MS)
+    })
+    return mouseQueued
   }
 
   return {
@@ -229,9 +257,11 @@ export function createRunner({ container, mode, runMode, width, height, backgrou
     destroy() {
       if (destroyed) return
       destroyed = true
-      for (const settle of pending.values()) settle({ error: errorInfo('Runner destroyed'), console: '' })
+      for (const settle of pending.values()) settle({ error: destroyedError(), console: '' })
+      settleReady?.({ error: destroyedError() })
       stopWorker()
-      if (!inWorker) window.removeEventListener('message', onWindowMessage)
+      window.removeEventListener('message', onWindowMessage)
+      window.removeEventListener('mouseup', onMouseUp)
       iframe = null
       element.remove()
     },
