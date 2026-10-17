@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>CapJS runner harness</title>
+</head>
+<body>
+  <script type="module">
+    import { createRunner } from '/src/runner/runner.js'
+    import { inkFraction } from '/src/runner/sample.js'
+
+    // Ink fraction of a fresh grab; the bitmap is closed afterwards.
+    async function sample(runner, w = 32, h = 18) {
+      const bitmap = await runner.grab()
+      try { return await inkFraction(bitmap, w, h) } finally { bitmap?.close() }
+    }
+
+    window.harness = { createRunner, sample, inkFraction }
+  </script>
+</body>
+</html>
