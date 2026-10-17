@@ -5,8 +5,8 @@ import {
   dropCursor, rectangularSelection, crosshairCursor, highlightActiveLine, Decoration,
 } from '@codemirror/view'
 import { EditorState, Compartment, StateEffect, StateField, Prec } from '@codemirror/state'
-import { indentOnInput, syntaxHighlighting, defaultHighlightStyle, bracketMatching } from '@codemirror/language'
-import { history, defaultKeymap, historyKeymap, indentWithTab } from '@codemirror/commands'
+import { syntaxHighlighting, defaultHighlightStyle, bracketMatching } from '@codemirror/language'
+import { history, defaultKeymap, historyKeymap, indentWithTab, insertNewline } from '@codemirror/commands'
 import { highlightSelectionMatches, searchKeymap } from '@codemirror/search'
 import { autocompletion, completeAnyWord, completionKeymap } from '@codemirror/autocomplete'
 import { javascript } from '@codemirror/lang-javascript'
@@ -76,15 +76,16 @@ export function createEditor(parent, { theme = 'capjs', fontSize = 2, onChange =
         drawSelection(),
         dropCursor(),
         EditorState.allowMultipleSelections.of(true),
-        indentOnInput(),
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         bracketMatching(),
         rectangularSelection(),
         crosshairCursor(),
         highlightActiveLine(),
+        EditorView.lineWrapping,
         highlightSelectionMatches(),
         autocompletion({ override: [completeAnyWord], activateOnTyping: false }),
-        keymap.of([...defaultKeymap, ...searchKeymap, ...historyKeymap, ...completionKeymap, indentWithTab]),
+        // Enter is a plain newline: no automatic indentation (the original CapJS had smartIndent off)
+        keymap.of([{ key: 'Enter', run: insertNewline }, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...completionKeymap, indentWithTab]),
         uncompressPaste,
         errorLineField,
         languageConf.of(LANGUAGES[language]()),

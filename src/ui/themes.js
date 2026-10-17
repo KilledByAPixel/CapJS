@@ -14,7 +14,8 @@ const capjsTheme = EditorView.theme({
   '.cm-gutters': { backgroundColor: '#111', color: '#888', border: 'none' },
   '.cm-lineNumbers .cm-gutterElement': { paddingRight: '10px' },
   '.cm-activeLineGutter': { backgroundColor: '#111', color: '#eee' },
-  '.cm-activeLine': { backgroundColor: '#111' },
+  // translucent: the selection layer is drawn beneath lines, so an opaque color would hide it
+  '.cm-activeLine': { backgroundColor: '#ffffff11' },
   '.cm-searchMatch': { backgroundColor: '#ff772233', outline: '1px solid #ff9933' },
   '.cm-searchMatch.cm-searchMatch-selected': { backgroundColor: '#ff7722dd', color: '#fff' },
   '&.cm-focused .cm-matchingBracket': { color: '#f0f', backgroundColor: 'transparent' },
@@ -48,7 +49,7 @@ const capjsHighlight = HighlightStyle.define([
 const lightTheme = EditorView.theme({
   '&': { backgroundColor: '#fff', color: '#111' },
   '.cm-gutters': { backgroundColor: '#f2f2f2', color: '#888', border: 'none' },
-  '.cm-activeLine': { backgroundColor: '#f4f7ff' },
+  '.cm-activeLine': { backgroundColor: '#0040ff0b' },
   '.cm-activeLineGutter': { backgroundColor: '#e6e9f0', color: '#111' },
 }, { dark: false })
 

@@ -176,13 +176,15 @@ export function createSession({ container, editor, clock, settings, library = nu
     // the page loads arrive as async errors before the load replies, and must stay.
     // With time, the next successful frame clears it.
     if (!r.supportsTime) setError(null)
+    // Play is the intent from the moment the load starts, so a pause or step pressed
+    // while it loads sticks instead of being overridden when the load finishes.
+    clock.playing = r.supportsTime
     emitState()
     const result = await r.load(code, { loopProtect: r.runMode === 'page' })
     if (busy === token) busy = null
     if (gen !== generation) return
     addConsole(result.console)
     if (result.error) setError(result.error)
-    else clock.playing = r.supportsTime
     emitState()
   }
 

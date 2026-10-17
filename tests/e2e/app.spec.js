@@ -25,6 +25,7 @@ test('an infinite loop never freezes the editor', async ({ page }) => {
   await expect.poll(() => ink(page)).toBeGreaterThan(0.95)
 })
 test('pause, step and slider move time', async ({ page }) => {
+  await expect(page.locator('#time-display')).not.toHaveText('0.00') // running, past its first frame
   await page.click('#btn-pause'); const t0 = await page.textContent('#time-display')
   await page.click('#btn-step'); await expect(page.locator('#time-display')).not.toHaveText(t0)
   await page.locator('#time-slider').fill('600'); await expect(page.locator('#time-display')).toHaveText('10.00')
@@ -112,4 +113,48 @@ test('Escape closes only the topmost open overlay', async ({ page }) => {
   await expect(page.locator('#history-panel')).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(page.locator('#history-panel')).toBeHidden()
+})
+test('the current-line highlight never hides the selection', async ({ page }) => {
+  for (const theme of ['capjs', 'one-dark', 'light']) {
+    await page.selectOption('#theme-select', theme)
+    await page.click('#editor .cm-content'); await page.keyboard.press('Control+A')
+    const alpha = await page.evaluate(() => {
+      const bg = getComputedStyle(document.querySelector('#editor .cm-activeLine')).backgroundColor
+      const parts = bg.match(/\(([^)]+)\)/)[1].split(',').map(Number)
+      return parts.length === 4 ? parts[3] : 1
+    })
+    expect(alpha, theme).toBeLessThan(0.5)
+  }
+})
+test('long lines wrap instead of scrolling sideways', async ({ page }) => {
+  await typeCode(page, 'x.fillRect(0,0,9,9)//' + 'a'.repeat(400))
+  const { scroll, client } = await page.evaluate(() => {
+    const s = document.querySelector('#editor .cm-scroller'); return { scroll: s.scrollWidth, client: s.clientWidth }
+  })
+  expect(scroll).toBeLessThanOrEqual(client)
+})
+test('Beautify spreads a squeezed dweet onto lines and can be undone', async ({ page }) => {
+  const code = () => page.evaluate(() => capjsDebug.session.code)
+  await typeCode(page, 'c.width|=0;for(i=9;i--;)x.fillRect(i,0,9,9)')
+  await page.waitForTimeout(600)
+  await page.click('#btn-beautify')
+  await expect.poll(code).toBe('c.width|=0;\nfor(i=9;i--;)\nx.fillRect(i,0,9,9)')
+  await page.click('#editor .cm-content'); await page.keyboard.press('Control+Z')
+  await expect.poll(code).toBe('c.width|=0;for(i=9;i--;)x.fillRect(i,0,9,9)')
+})
+test('pausing while a program is still loading keeps it paused', async ({ page }) => {
+  await page.context().route(/runner\/worker\.js/, async route => { await new Promise(r => setTimeout(r, 1500)); await route.continue() })
+  await typeCode(page, 'x.fillRect(0,0,t*99,9)')
+  await page.waitForTimeout(500) // past the 300 ms change debounce: the slowed load is in flight
+  await page.click('#btn-pause')
+  await page.waitForTimeout(2000) // the load finishes
+  const before = await page.textContent('#time-display')
+  await page.waitForTimeout(400)
+  expect(await page.textContent('#time-display')).toBe(before)
+})
+test('Enter inserts a plain newline with no automatic indentation', async ({ page }) => {
+  await typeCode(page, 'if(t){')
+  await page.keyboard.press('Enter'); await page.keyboard.insertText('a}')
+  await page.keyboard.press('Enter'); await page.keyboard.insertText('b')
+  await expect.poll(() => page.evaluate(() => capjsDebug.session.code)).toBe('if(t){\na}\nb')
 })

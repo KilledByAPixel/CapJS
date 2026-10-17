@@ -1,12 +1,7 @@
 // Loop buster: inserts a guard call into for/while loop heads, inline only.
 // Never adds or removes newlines, so error line numbers stay intact.
 
-// Copy of code with comment and string contents blanked (same length, newlines kept),
-// so scanning never sees loop-like text inside them.
-function mask(code) {
-  const blank = s => s.replace(/[^\n]/g, ' ')
-  return code.replace(/\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|$)|"(?:\\[\s\S]|[^"\\\n])*"?|'(?:\\[\s\S]|[^'\\\n])*'?|`(?:\\[\s\S]|[^`\\])*`?/g, blank)
-}
+import { mask } from './mask.js'
 
 // Index of the ")" matching the "(" at `open` in masked code, or -1.
 function matchParen(code, open) {

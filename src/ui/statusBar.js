@@ -1,6 +1,6 @@
-// Status row: character, line and byte counts, plus Compress and Minify.
+// Status row: character, line and byte counts, plus Compress, Minify and Beautify.
 
-import { compress, minify, countChars, countBytes } from '../code/dwitter.js'
+import { compress, minify, beautify, countChars, countBytes } from '../code/dwitter.js'
 
 export const DWEET_LIMIT = 140
 const CODE_TOOL_MODES = ['dweet', 'js', 'three']
@@ -8,8 +8,8 @@ const CODE_TOOL_MODES = ['dweet', 'js', 'three']
 export function createStatusBar({ session, editor }) {
   const $ = id => document.getElementById(id)
   const chars = $('char-count'), lines = $('line-count'), bytes = $('byte-count')
-  const compressBtn = $('btn-compress'), minifyBtn = $('btn-minify')
-  const titles = { compress: compressBtn.title, minify: minifyBtn.title }
+  const tools = [[$('btn-compress'), compress], [$('btn-minify'), minify], [$('btn-beautify'), beautify]]
+  const titles = new Map(tools.map(([btn]) => [btn, btn.title]))
 
   function update({ code }) {
     const n = countChars(code)
@@ -22,9 +22,10 @@ export function createStatusBar({ session, editor }) {
     bytes.textContent = `${b} byte${b === 1 ? '' : 's'}`
     const usable = CODE_TOOL_MODES.includes(session.concreteMode)
     const why = usable ? '' : ` (not available in ${session.concreteMode} mode)`
-    compressBtn.disabled = minifyBtn.disabled = !usable
-    compressBtn.title = titles.compress + why
-    minifyBtn.title = titles.minify + why
+    for (const [btn] of tools) {
+      btn.disabled = !usable
+      btn.title = titles.get(btn) + why
+    }
   }
   session.on('codeChanged', update)
 
@@ -33,6 +34,5 @@ export function createStatusBar({ session, editor }) {
     const next = fn(session.code)
     if (next !== session.code) editor.setCode(next)
   }
-  compressBtn.addEventListener('click', replace(compress))
-  minifyBtn.addEventListener('click', replace(minify))
+  for (const [btn, fn] of tools) btn.addEventListener('click', replace(fn))
 }
