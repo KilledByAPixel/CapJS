@@ -7,7 +7,129 @@
   <link rel="icon" href="/favicon.png">
 </head>
 <body>
-  <div id="app"></div>
+  <div id="app">
+    <header class="topbar">
+      <b class="app-name">CapJS</b>
+      <label title="Program type. Auto detects it from the code.">Mode
+        <select id="mode-select" title="Program type. Auto detects it from the code.">
+          <option value="auto">auto</option>
+          <option value="dweet">dweet</option>
+          <option value="js">js</option>
+          <option value="html">html</option>
+          <option value="three">three.js</option>
+          <option value="shadertoy">shadertoy</option>
+          <option value="littlejs">littlejs</option>
+        </select>
+      </label>
+      <label title="Where the code runs. A worker can't freeze the editor; full page gives access to the DOM.">Runs in
+        <select id="runmode-select" title="Where the code runs. A worker can't freeze the editor; full page gives access to the DOM.">
+          <option value="auto">auto</option>
+          <option value="worker">worker</option>
+          <option value="page">full page</option>
+        </select>
+      </label>
+      <label title="What happens after you stop typing">On change
+        <select id="onchange-select" title="What happens after you stop typing: restart from time 0, rebuild at the current time, or do nothing">
+          <option value="restart">restart</option>
+          <option value="rebuild">rebuild</option>
+          <option value="nothing">do nothing</option>
+        </select>
+      </label>
+      <span class="spacer"></span>
+      <label title="Editor color theme">Theme
+        <select id="theme-select" title="Editor color theme">
+          <option value="capjs">capjs</option>
+          <option value="one-dark">one dark</option>
+          <option value="light">light</option>
+        </select>
+      </label>
+      <select id="fontsize-select" title="Editor font size">
+        <option value="1">XS</option>
+        <option value="1.5">S</option>
+        <option value="2">M</option>
+        <option value="2.5">L</option>
+        <option value="3">XL</option>
+      </select>
+      <button id="btn-help" title="Help and examples">? Help</button>
+    </header>
+
+    <div class="main">
+      <aside id="sidebar" hidden></aside>
+
+      <div class="left">
+        <div id="canvas-host" title="Drop an image here to use it as the custom image">
+          <button id="safe-start" hidden title="This code runs on the full page. Click to run it.">Click to run</button>
+        </div>
+
+        <div class="transport" id="transport">
+          <button id="btn-restart" title="Restart (Alt+Down or Alt+Enter)">▐◄</button>
+          <button id="btn-pause" title="Pause / resume (Alt+Up)">▌▌</button>
+          <button id="btn-step" title="Single step (Alt+Right)">►▌</button>
+          <span id="time-display" title="Program time in seconds">0.00</span>
+          <input id="time-slider" type="range" min="1" max="1800" value="1" title="Seek: program time (30 seconds at 60 steps per second)">
+          <button id="btn-fullscreen" title="Fullscreen">⛶</button>
+          <button id="btn-screenshot" title="Screenshot (save a PNG)">📷</button>
+        </div>
+
+        <section class="panel" id="capture-panel">
+          <h5>Capture</h5>
+          <button id="btn-capture" class="capture" title="Render and save an animation">● Capture</button>
+        </section>
+
+        <section class="panel" id="canvas-panel">
+          <h5>Canvas</h5>
+          <div class="grid">
+            <span>Background</span>
+            <span class="row">
+              <input id="bg-color" type="color" value="#ffffff" title="Background color behind the canvas">
+              <label title="Show the background color"><input id="bg-enabled" type="checkbox" checked title="Show the background color"> on</label>
+            </span>
+            <span>Aspect</span>
+            <select id="cap-aspect" title="How the canvas maps onto the capture size">
+              <option value="fill">fill</option>
+              <option value="fit">fit</option>
+              <option value="center">center</option>
+              <option value="stretch">stretch</option>
+            </select>
+            <span>Image</span>
+            <span class="row">
+              <label class="btn" title="Load a custom image: image in dweet/JS, iChannel0 in Shadertoy. You can also drop one on the canvas.">Load…<input id="image-input" type="file" accept="image/*" hidden></label>
+              <span id="image-name" class="dim">none</span>
+              <button id="btn-image-clear" title="Clear the custom image">✕</button>
+            </span>
+            <span>Canvas</span>
+            <span class="row">
+              <input id="canvas-width" type="number" min="1" max="8192" value="1920" title="Canvas width in pixels">
+              ×
+              <input id="canvas-height" type="number" min="1" max="8192" value="1080" title="Canvas height in pixels">
+            </span>
+          </div>
+        </section>
+      </div>
+
+      <div class="right">
+        <div class="namebar">
+          <input id="creation-name" type="text" spellcheck="false" title="Creation name (click to rename)">
+          <span id="modified-dot" hidden title="Unsaved changes">●</span>
+          <button id="btn-save" class="save" title="Save (Ctrl+S)">Save</button>
+          <button id="btn-fork" title="Fork: copy this creation into a new one">Fork</button>
+          <button id="btn-history" title="Saved versions of this creation">History</button>
+          <button id="btn-share" class="share" title="Create a link that contains the code, to share or bookmark">Share</button>
+        </div>
+        <div id="editor"></div>
+        <div id="error-bar" hidden></div>
+        <div id="console-bar" hidden title="console.log output"></div>
+        <div class="status">
+          <span id="char-count" class="big" title="Characters (code points); dweets are limited to 140">0 / 140</span>
+          <span id="line-count" title="Lines">0 lines</span>
+          <span id="byte-count" title="Bytes (UTF-8)">0 bytes</span>
+          <span class="spacer"></span>
+          <button id="btn-compress" title="Dwitter unicode compression (2 characters per character)">Compress</button>
+          <button id="btn-minify" title="Remove blank lines, comment lines and indentation">Minify</button>
+        </div>
+      </div>
+    </div>
+  </div>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
