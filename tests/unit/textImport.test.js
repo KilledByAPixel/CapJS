@@ -13,5 +13,5 @@ test('each text file becomes a creation named after the file', async () => {
 test('templates cover every mode except auto', () => {
   expect(TEMPLATES.map(t => t.id)).toEqual(['dweet', 'js', 'html', 'three', 'shadertoy', 'littlejs'])
   for (const t of TEMPLATES) expect(t.code.split('\n')[0]).toMatch(/^(\/\/|<!--)/)
-  expect(TEMPLATES.map(t => t.mode)).toEqual(['dweet', 'dweet', 'js', 'html', 'three', 'shadertoy', 'littlejs'])
+  expect(TEMPLATES.map(t => t.mode)).toEqual(['dweet', 'js', 'html', 'three', 'shadertoy', 'littlejs'])
 })
