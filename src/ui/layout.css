@@ -214,6 +214,9 @@ select, input[type="text"], input[type="number"] {
   letter-spacing: 1px;
 }
 #gallery-deleted { display: flex; flex-direction: column; gap: 4px; }
+.gallery-danger { display: flex; justify-content: flex-end; margin-top: 16px; padding-top: 10px; border-top: 1px solid #333; }
+.gallery-danger button.danger { background: #3a1010; color: #ff7a7a; border: 1px solid #a33; }
+.gallery-danger button.danger:hover { background: #5a1414; color: #fff; }
 .deleted-item { display: flex; gap: 10px; align-items: center; }
 .deleted-item .name { min-width: 16ch; }
 

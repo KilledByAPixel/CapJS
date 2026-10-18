@@ -157,6 +157,13 @@ export async function openLibrary({ dbName = 'capjs', now = Date.now } = {}) {
     })
   }
 
+  // Empties the whole library: creations, versions, drafts, tombstones and kv (the custom
+  // image, backup counters, first-run flag). App settings live in localStorage, not here.
+  function clearAll() {
+    const stores = ['creations', 'versions', 'drafts', 'tombstones', 'kv']
+    return transact(db, stores, s => { for (const name of stores) s[name].clear() })
+  }
+
   async function listTombstones() {
     const soft = (await getAll(db, 'creations'))
       .filter(c => c.deletedAt != null)
@@ -170,7 +177,7 @@ export async function openLibrary({ dbName = 'capjs', now = Date.now } = {}) {
     saveVersion: serial(saveVersion), listVersions, getVersion,
     fork: serial(fork), rename: serial(rename), setDraft, getDraft, discardDraft,
     deleteCreation: serial(deleteCreation), restoreCreation: serial(restoreCreation),
-    purgeCreation: serial(purgeCreation), listTombstones,
+    purgeCreation: serial(purgeCreation), clearAll: serial(clearAll), listTombstones,
     getKV, setKV, raw, runExclusive,
   }
 }

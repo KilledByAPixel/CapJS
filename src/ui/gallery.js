@@ -3,7 +3,7 @@
 // Files dropped on it are imported.
 //
 // handlers: onOpen(id), onDelete(id), onRestore(id), onPurge(id), onImportFiles(files),
-// onShow() (the gallery wants fresh data: call render).
+// onClearAll(), onShow() (the gallery wants fresh data: call render).
 
 import { el, formatAge, installFileDrop, thumbElement } from './sidebar.js'
 import { closeOnEscape } from './overlays.js'
@@ -24,6 +24,7 @@ export function createGallery({ handlers }) {
   }
 
   $('btn-gallery-close').addEventListener('click', hide)
+  $('btn-clear-library').addEventListener('click', () => handlers.onClearAll())
   gallery.addEventListener('click', e => { if (e.target === gallery) hide() })
   closeOnEscape(gallery, hide)
   search.addEventListener('input', () => draw())

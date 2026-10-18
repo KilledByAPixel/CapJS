@@ -108,6 +108,7 @@ export function createLibraryController({ session, settings, saveSettings, lib }
       onRestore: guard('Could not restore', id => lib.restoreCreation(id).then(refresh)),
       onPurge: id => purgeCreation(id),
       onImportFiles: files => importFiles(files),
+      onClearAll: () => clearLibrary(),
       onShow: guard('Could not list creations', () => refresh()),
     },
   })
@@ -279,6 +280,17 @@ export function createLibraryController({ session, settings, saveSettings, lib }
       await lib.purgeCreation(id)
       await refresh()
     } catch (e) { report('Could not delete', e) }
+  }
+
+  // Empties the whole library after two confirmations, then reloads into a fresh start.
+  async function clearLibrary() {
+    if (!confirm('Delete ALL creations, versions and drafts saved in this browser?\n\n'
+      + "This can't be undone. Export a backup first if you might want them back.")) return
+    if (prompt('Type DELETE to delete everything.') !== 'DELETE') return
+    try {
+      await lib.clearAll()
+    } catch (e) { return report('Could not delete everything', e) }
+    location.reload()
   }
 
   // --- Backup ---

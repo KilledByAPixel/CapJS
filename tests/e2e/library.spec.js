@@ -132,3 +132,23 @@ test('saving right after typing leaves no stale draft behind', async ({ page }) 
   await expect.poll(() => code(page)).toBe('x.fillRect(0,0,44,44)//second')
   await expect(page.locator('#modified-dot')).toBeHidden()
 })
+test('Delete everything asks twice, then empties the library and starts fresh', async ({ page }) => {
+  await page.click('#btn-fork') // two creations
+  await expect(page.locator('.lib-item')).toHaveCount(2)
+  const answers = [] // each dialog takes the next answer: undefined accepts a confirm, a string fills a prompt
+  page.on('dialog', d => d.accept(answers.shift()))
+  // declining the typed confirmation deletes nothing
+  answers.push(undefined, 'nope')
+  await page.click('#btn-show-all'); await page.click('#btn-clear-library')
+  await page.waitForTimeout(300)
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.lib-item')).toHaveCount(2)
+  // confirming deletes everything and reloads into a fresh default dweet
+  answers.push(undefined, 'DELETE')
+  await page.click('#btn-show-all')
+  await Promise.all([page.waitForEvent('load'), page.click('#btn-clear-library')])
+  await page.waitForFunction(() => window.capjsDebug)
+  await expect(page.locator('.lib-item')).toHaveCount(1)
+  await expect(page.locator('.lib-item')).toContainText('v1')
+  expect(await page.evaluate(() => capjsDebug.session.code)).toContain('fillRect')
+})
