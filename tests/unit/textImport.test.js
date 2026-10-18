@@ -11,7 +11,7 @@ test('each text file becomes a creation named after the file', async () => {
   expect((await lib.listVersions(made[0].id))[0].code).toBe('x.fillRect(0,0,9,9)')
 })
 test('templates cover every mode except auto', () => {
-  expect(TEMPLATES.map(t => t.id)).toEqual(['dweet', 'dweet-image', 'js', 'html', 'three', 'shadertoy', 'littlejs'])
+  expect(TEMPLATES.map(t => t.id)).toEqual(['dweet', 'js', 'html', 'three', 'shadertoy', 'littlejs'])
   for (const t of TEMPLATES) expect(t.code.split('\n')[0]).toMatch(/^(\/\/|<!--)/)
   expect(TEMPLATES.map(t => t.mode)).toEqual(['dweet', 'dweet', 'js', 'html', 'three', 'shadertoy', 'littlejs'])
 })

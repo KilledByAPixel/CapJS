@@ -9,12 +9,6 @@ for(i=1e3;i--;)
 x.fillRect(960+900*S(i*2),540+500*C(t*PI/2+i*3),29,29)`,
   },
   {
-    id: 'dweet-image', name: 'Dweet with image', mode: 'dweet',
-    code: `// dweet that draws the custom image once it has loaded
-c.width|=0
-if(image)x.drawImage(image,960-300*C(t),540-300*S(t),600,600)`,
-  },
-  {
     id: 'js', name: 'JavaScript', mode: 'js',
     code: `// plain JavaScript, runs once on the page
 console.log('hello from CapJS')`,
