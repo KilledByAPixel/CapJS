@@ -52,3 +52,11 @@ After that, every push to `main` or `master` builds and deploys the site via `.g
 
 The `base` option in `vite.config.js` (`/CapJS/`) must match the repository name, or be changed to `/` when using a custom domain.
 
+
+## License
+
+Copyright (C) 2019-2026 Frank Force
+
+CapJS is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. See [LICENSE](LICENSE) for the full text.
+
+CapJS bundles these open source libraries, each under its own MIT license: [CodeMirror](https://codemirror.net/), [three.js](https://threejs.org/), [LittleJS](https://github.com/KilledByAPixel/LittleJS), [gifenc](https://github.com/mattdesl/gifenc), [webm-muxer](https://github.com/Vanilagy/webm-muxer) and [JSONCrush](https://github.com/KilledByAPixel/JSONCrush).
