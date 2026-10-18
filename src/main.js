@@ -50,8 +50,8 @@ async function boot() {
   })
   library = createLibraryController({ session, settings, saveSettings, lib })
 
-  function share() {
-    const url = buildShareUrl(location.href, { name: session.creation.name, mode: session.mode, code: session.code })
+  async function share() {
+    const url = await buildShareUrl(location.href, { name: session.creation.name, mode: session.mode, code: session.code })
     prompt('CapJS Code URL\nThis url contains your entire program!\nYou can share or bookmark this link.', url)
   }
 
@@ -66,8 +66,8 @@ async function boot() {
   installGlobalKeys(keys)
 
   // A share link opens as a new creation; otherwise the last one.
-  const shared = parseShareUrl(location.href)
-  if (shared) history.replaceState(null, '', location.pathname + location.hash)
+  const shared = await parseShareUrl(location.href)
+  if (location.search) history.replaceState(null, '', location.pathname + location.hash) // even a damaged link
   // First run: no creations yet and the help was never shown.
   let firstRun = false
   try { firstRun = !!lib && !(await lib.listCreations({ includeDeleted: true })).length && !(await lib.getKV('helpShown')) } catch (e) { console.error('First-run check failed', e) }

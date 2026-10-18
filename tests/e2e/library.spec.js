@@ -152,3 +152,19 @@ test('Delete everything asks twice, then empties the library and starts fresh', 
   await expect(page.locator('.lib-item')).toContainText('v1')
   expect(await page.evaluate(() => capjsDebug.session.code)).toContain('fillRect')
 })
+test('a Share link opens the same program as a new creation; old links still open', async ({ page }) => {
+  await typeCode(page, 'x.fillRect(0,0,99,99)//shared')
+  let url = null
+  page.once('dialog', d => { url = d.defaultValue(); d.dismiss() })
+  await page.click('#btn-share')
+  await expect.poll(() => url).toBeTruthy()
+  expect([...new URL(url).searchParams.keys()]).toEqual(['s'])
+  await typeCode(page, 'x.fillRect(0,0,9,9)//changed since sharing')
+  await page.goto(url); await page.waitForFunction(() => window.capjsDebug)
+  expect(await page.evaluate(() => capjsDebug.session.code)).toBe('x.fillRect(0,0,99,99)//shared')
+  expect(new URL(page.url()).search).toBe('') // the link's params are cleared after opening
+  // an old JSONCrush link from the original CapJS
+  await page.goto('./?filename=old%20one&crushed=x.fillRect%7B0,0,9,9%7D_'); await page.waitForFunction(() => window.capjsDebug)
+  expect(await page.evaluate(() => capjsDebug.session.code)).toBe('x.fillRect(0,0,9,9)')
+  await expect(page.locator('.lib-item', { hasText: 'old one' })).toBeVisible()
+})
