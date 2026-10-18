@@ -206,3 +206,21 @@ test('the first error stays until the code changes', async ({ page }) => {
   await typeCode(page, 'x.fillRect(0,0,9,9)')
   await expect(page.locator('#error-bar')).toBeHidden()
 })
+test('Ctrl+Space suggests by program type: canvas members after x., uniforms in Shadertoy, engine names in LittleJS', async ({ page }) => {
+  const popup = page.locator('.cm-tooltip-autocomplete')
+  const suggest = async code => {
+    await typeCode(page, code)
+    await page.keyboard.press('Control+Space')
+    await expect(popup).toBeVisible()
+  }
+  await suggest('c.width|=0;x.fillR')
+  await expect(popup).toContainText('fillRect')
+  await expect(popup).toContainText('(x, y, w, h)')
+  await page.keyboard.press('Enter')
+  await expect.poll(() => page.evaluate(() => capjsDebug.session.code)).toBe('c.width|=0;x.fillRect')
+  await suggest('void mainImage(out vec4 c, in vec2 p){c=vec4(iTi')
+  await expect(popup).toContainText('iTime')
+  await page.keyboard.press('Escape')
+  await suggest('function gameRender(){drawRe')
+  await expect(popup).toContainText('drawRect', { timeout: 10000 })
+})

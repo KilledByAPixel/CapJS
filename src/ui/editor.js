@@ -9,6 +9,7 @@ import { syntaxHighlighting, defaultHighlightStyle, bracketMatching } from '@cod
 import { history, defaultKeymap, historyKeymap, indentWithTab, insertNewline } from '@codemirror/commands'
 import { highlightSelectionMatches, searchKeymap } from '@codemirror/search'
 import { autocompletion, completeAnyWord, completionKeymap } from '@codemirror/autocomplete'
+import { capjsCompletions } from './completions.js'
 import { javascript } from '@codemirror/lang-javascript'
 import { html } from '@codemirror/lang-html'
 import { cpp } from '@codemirror/lang-cpp'
@@ -52,6 +53,7 @@ export function createEditor(parent, { theme = 'capjs', fontSize = 2, onChange =
   const languageConf = new Compartment()
   const historyConf = new Compartment()
   let language = languageKey('dweet')
+  let mode = 'dweet' // the concrete program type, for Ctrl+Space suggestions
   let silent = false
 
   const run = fn => () => { fn?.(); return true }
@@ -83,7 +85,8 @@ export function createEditor(parent, { theme = 'capjs', fontSize = 2, onChange =
         highlightActiveLine(),
         EditorView.lineWrapping,
         highlightSelectionMatches(),
-        autocompletion({ override: [completeAnyWord], activateOnTyping: false }),
+        // The list only opens on Ctrl+Space, so Enter may accept at once (no interaction delay).
+        autocompletion({ override: [capjsCompletions(() => mode), completeAnyWord], activateOnTyping: false, interactionDelay: 0 }),
         // Enter is a plain newline: no automatic indentation (the original CapJS had smartIndent off)
         keymap.of([{ key: 'Enter', run: insertNewline }, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...completionKeymap, indentWithTab]),
         uncompressPaste,
@@ -124,7 +127,8 @@ export function createEditor(parent, { theme = 'capjs', fontSize = 2, onChange =
       view.requestMeasure()
     },
     // Swaps syntax highlighting for a concrete mode (html, shadertoy, or JavaScript for the rest).
-    setLanguage(mode) {
+    setLanguage(concreteMode) {
+      mode = concreteMode
       if (languageKey(mode) === language) return
       language = languageKey(mode)
       view.dispatch({ effects: languageConf.reconfigure(LANGUAGES[language]()) })
