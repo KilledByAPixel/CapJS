@@ -4,7 +4,9 @@ import { mask } from './mask.js'
 
 const WRAPPER = /eval\(unescape\(escape`([^`]*)`\.replace\(\/u\.\.\/g,(''|"")\)\)\)/
 
+// Already-compressed code is returned unchanged, so pressing Compress twice does nothing.
 export function compress(code) {
+  if (isCompressed(code)) return code
   let text = ''
   for (const ch of code.trim()) {
     text += ch.charCodeAt(0) > 255 ? escape(ch).replace(/%u/g, '\\u') : ch

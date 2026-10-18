@@ -50,3 +50,8 @@ test('counts', () => {
   expect(countChars('a█')).toBe(2)
   expect(countBytes('a█')).toBe(4)
 })
+test('compress leaves already-compressed code alone', () => {
+  const once = compress(prog)
+  expect(compress(once)).toBe(once)
+  expect(compress('// note\n' + once)).toBe('// note\n' + once)
+})
