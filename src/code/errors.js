@@ -1,5 +1,5 @@
 // Turns thrown errors into what the error box shows: the message with its name, the editor
-// line and column, the chain of user-code frames, and a hint for common mistakes.
+// line and column, and the chain of user-code frames.
 
 import { parse } from 'acorn'
 
@@ -53,30 +53,13 @@ export function describeError(e, { offset = DWEET_LINE_OFFSET, code = null, line
   return { message, line: loc?.line ?? null, column: loc?.column ?? null, stack: frames.length > 1 ? frames : [] }
 }
 
-const HINTS = [
-  [/is not defined/, 'Check the spelling, or set it before using it.'],
-  [/Unexpected end of input|Unterminated|missing \) after/, "A ) or } is probably missing, or a string isn't closed."],
-  [/Cannot (read|set) propert(y|ies) of (undefined|null)/, "Something on this line hasn't been set yet (it's undefined or null)."],
-  [/is not a function/, "That isn't a function here: check the spelling, or that it was set to a function."],
-  [/Loop timed out|took longer than/, 'This loop may never end: check its condition, and that its counter moves toward it.'],
-  [/before initialization/, 'It is used before the line that declares it with let or const runs.'],
-  [/Assignment to constant/, "A const can't be changed: use let instead."],
-  [/Maximum call stack/, 'A function keeps calling itself without ever stopping.'],
-  [/Unexpected|Invalid or unexpected token/, 'Look at this spot for a missing or extra character, such as a comma, bracket or operator.'],
-]
-
-export function errorHint(message) {
-  return HINTS.find(([re]) => re.test(message))?.[1] ?? null
-}
-
 const where = ({ line, column }) => line ? `Line:${line}` + (column ? `, Column:${column}` : '') : ''
 
-// What the error box shows: {head, frames, hint}, or null for no error.
+// What the error box shows: {head, frames}, or null for no error.
 export function formatError(error) {
   if (!error) return null
   return {
     head: error.line ? `${error.message} (${where(error)})` : error.message,
     frames: (error.stack ?? []).map(f => f.fn ? `at ${f.fn} (${where(f)})` : `at ${where(f)}`),
-    hint: errorHint(error.message),
   }
 }

@@ -420,8 +420,6 @@ button.share { background: #ff8; }
   background: #141416;
 }
 #error-bar .error-frame { color: #c78a96; padding-left: 2ch; }
-#error-bar .error-hint { color: #e6db74; margin-top: 4px; }
-#error-bar .error-hint::before { content: 'Hint: '; color: #888; }
 #console-bar {
   max-height: 8em;
   overflow: auto;

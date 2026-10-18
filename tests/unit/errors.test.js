@@ -13,7 +13,7 @@ test('offset is a parameter; result below 1 is null', () => {
   expect(parseErrorLine(s, 4)).toBeNull()
 })
 
-import { describeError, locateSyntaxError, errorHint, formatError } from '../../src/code/errors.js'
+import { describeError, locateSyntaxError, formatError } from '../../src/code/errors.js'
 const thrown = (body, ...args) => { try { new Function('t', body)(...args) } catch (e) { return e } }
 
 test('describeError names the error and gives editor line and column', () => {
@@ -40,23 +40,13 @@ test('syntax errors are located by parsing the original code', () => {
   expect(locateSyntaxError('return 1')).toBeNull() // dweet bodies may return
   expect(locateSyntaxError('x=1')).toBeNull()
 })
-test('hints for common errors', () => {
-  expect(errorHint('ReferenceError: nope is not defined')).toMatch(/spelling/)
-  expect(errorHint('SyntaxError: Unexpected end of input')).toMatch(/\)|\}/)
-  expect(errorHint("TypeError: Cannot read properties of undefined (reading 'x')")).toMatch(/hasn't been set/)
-  expect(errorHint('TypeError: f is not a function')).toMatch(/function/)
-  expect(errorHint('Loop timed out')).toMatch(/never end/)
-  expect(errorHint('Stopped: a frame took longer than 1500 ms (infinite loop?)')).toMatch(/never end/)
-  expect(errorHint('Error: something custom')).toBeNull()
-})
-test('formatError gives the head, the frames to show and the hint', () => {
+test('formatError gives the head and the frames to show', () => {
   expect(formatError({ message: 'ReferenceError: nope is not defined', line: 2, column: 1, stack: [] })).toEqual({
     head: 'ReferenceError: nope is not defined (Line:2, Column:1)',
     frames: [],
-    hint: 'Check the spelling, or set it before using it.',
   })
   expect(formatError({ message: 'Error: x', line: 2, column: null, stack: [{ fn: 'draw', line: 2, column: 3 }, { fn: null, line: 4, column: 1 }] }))
-    .toEqual({ head: 'Error: x (Line:2)', frames: ['at draw (Line:2, Column:3)', 'at Line:4, Column:1'], hint: null })
+    .toEqual({ head: 'Error: x (Line:2)', frames: ['at draw (Line:2, Column:3)', 'at Line:4, Column:1'] })
   expect(formatError({ message: 'Loop timed out', line: null })).toMatchObject({ head: 'Loop timed out', frames: [] })
   expect(formatError(null)).toBeNull()
 })

@@ -183,11 +183,10 @@ test('a file dropped anywhere is never opened by the browser', async ({ page }) 
   await expect(page.locator('#image-name')).toHaveText('dot.png')
   await expect(page.locator('#drop-overlay')).toBeHidden()
 })
-test('a syntax error shows its line and column, highlights that line and gives a hint', async ({ page }) => {
+test('a syntax error shows its line and column, highlights that line', async ({ page }) => {
   await typeCode(page, 'x.fillRect(0,0,9,9)\ny=)')
   const bar = page.locator('#error-bar')
   await expect(bar.locator('.error-head')).toHaveText(/^SyntaxError: .*\(Line:2, Column:3\)$/)
-  await expect(bar.locator('.error-hint')).toBeVisible()
   await expect(page.locator('#editor .cm-errorLine')).toHaveText('y=)')
 })
 test('an error deep in a function lists the chain of user lines', async ({ page }) => {
@@ -195,7 +194,6 @@ test('an error deep in a function lists the chain of user lines', async ({ page 
   const bar = page.locator('#error-bar')
   await expect(bar.locator('.error-head')).toHaveText('ReferenceError: nope is not defined (Line:2, Column:3)')
   await expect(bar.locator('.error-frame')).toHaveText(['at draw (Line:2, Column:3)', 'at Line:4, Column:1'])
-  await expect(bar.locator('.error-hint')).toContainText('spelling')
   await expect(page.locator('#editor .cm-errorLine')).toHaveText('  nope()')
 })
 test('the first error stays until the code changes', async ({ page }) => {

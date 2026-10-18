@@ -1,6 +1,6 @@
 // The error box and the console box under the editor; each is hidden when empty.
-// The error box shows the error with its line and column, the chain of user-code
-// frames that led there, and a hint for common mistakes.
+// The error box shows the error with its line and column, and the chain of user-code
+// frames that led there.
 
 import { formatError } from '../code/errors.js'
 
@@ -14,7 +14,6 @@ export function createErrorBar({ session, errorEl, consoleEl }) {
       errorEl.replaceChildren(...(view ? [
         line('error-head', view.head),
         ...view.frames.map(f => line('error-frame', f)),
-        ...(view.hint ? [line('error-hint', view.hint)] : []),
       ] : []))
       errorEl.hidden = !view
     }
