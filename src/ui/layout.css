@@ -26,6 +26,7 @@ html, body {
   height: 100%;
   display: flex;
   flex-direction: column;
+  visibility: visible; /* index.html hides it until this stylesheet applies */
 }
 
 button, select, input {

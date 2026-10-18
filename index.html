@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CapJS</title>
   <link rel="icon" href="/favicon.png">
+  <meta name="color-scheme" content="dark">
+  <!-- Dark from the first paint; the layout stays hidden until layout.css applies (it
+       un-hides #app), so the unstyled page never flashes white while styles load. -->
+  <style>html, body { margin: 0; background: #222; color: #ddd; } #app { visibility: hidden; }</style>
 </head>
 <body>
   <div id="app">

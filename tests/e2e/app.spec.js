@@ -51,6 +51,7 @@ test('page-mode infinite loop saved as draft boots to safe start', async ({ page
 test('help opens, lists shortcuts, starts a template', async ({ page }) => {
   await page.click('#btn-help')
   for (const k of ['Alt+Up', 'Alt+Down', 'Alt+Enter', 'Alt+Right', 'Ctrl+S', 'Ctrl+Space', 'Ctrl+F']) await expect(page.locator('#help-panel')).toContainText(k)
+  await expect(page.locator('#help-panel')).toContainText('Suggestions for this program type')
   await page.locator('#help-panel [data-template="three"]').click()
   await expect(page.locator('#help-panel')).toBeHidden()
   await expect(page.locator('#editor')).toContainText('THREE')
@@ -223,4 +224,13 @@ test('Ctrl+Space suggests by program type: canvas members after x., uniforms in 
   await page.keyboard.press('Escape')
   await suggest('function gameRender(){drawRe')
   await expect(popup).toContainText('drawRect', { timeout: 10000 })
+})
+test('before the code and styles load, the page is dark with the layout hidden (no white flash)', async ({ page }) => {
+  await page.route(/\/src\/main\.js/, route => route.abort()) // the dev server's styles arrive through main.js
+  await page.goto('./')
+  const look = await page.evaluate(() => ({
+    bg: getComputedStyle(document.documentElement).backgroundColor,
+    app: getComputedStyle(document.getElementById('app')).visibility,
+  }))
+  expect(look).toEqual({ bg: 'rgb(34, 34, 34)', app: 'hidden' })
 })
