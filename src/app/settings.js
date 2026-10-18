@@ -15,7 +15,7 @@ export const DEFAULT_SETTINGS = {
     height: 540,
     seconds: 2,
     fps: 60,
-    dither: 'fs',
+    dither: 'none',
     speed: 1,
     aspect: 'fill',
   },

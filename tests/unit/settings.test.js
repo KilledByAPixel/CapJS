@@ -28,3 +28,6 @@ test('a stored non-object never replaces an object default', () => {
   s.setItem('capjs.settings', JSON.stringify({ capture: [1] }))
   expect(loadSettings(s).capture).toEqual(DEFAULT_SETTINGS.capture)
 })
+test('GIF dithering is off by default', () => {
+  expect(DEFAULT_SETTINGS.capture.dither).toBe('none')
+})

@@ -81,6 +81,6 @@ test('a capture is named after the creation open when it started', async ({ page
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#btn-gif-download')])
   expect(dl.suggestedFilename()).toBe(`${name}.gif`)
 })
-test('the GIF size warning suggests ordered dither', async ({ page }) => {
-  expect(await page.locator('#gif-warning').textContent()).toContain('ordered dither')
+test('the GIF size warning suggests no dithering', async ({ page }) => {
+  expect(await page.locator('#gif-warning').textContent()).toContain('no dithering')
 })
