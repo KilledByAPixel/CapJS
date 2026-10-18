@@ -4,7 +4,7 @@ A browser live-code editor for dweets, shaders and canvas experiments. Write cod
 
 ## Features
 
-- Live editor (CodeMirror 6) with themes, font sizes, word completion and search.
+- Live editor (CodeMirror 6) with themes, font sizes, Ctrl+Space suggestions that fit the program type, and search.
 - Modes: auto-detect, dweet, js, html, three.js, shadertoy and littlejs. Dweet, three.js and Shadertoy code can run in a worker so an infinite loop cannot freeze the editor; html, js and littlejs run on the page.
 - Fixed-step time at 60 steps per second, with pause, single-step and a seek slider.
 - Library of creations with versions: Save, Fork, History, revert to the last saved version, recently deleted, and a gallery with search.
@@ -21,7 +21,7 @@ A browser live-code editor for dweets, shaders and canvas experiments. Write cod
 | Alt+Down or Alt+Enter | Restart |
 | Alt+Right | Single step |
 | Ctrl+S | Save |
-| Ctrl+Space | Word completion |
+| Ctrl+Space | Suggestions for the program type: canvas members after `x.`, globals, Shadertoy uniforms, LittleJS names |
 | Ctrl+F | Search |
 
 ## Backing up your work

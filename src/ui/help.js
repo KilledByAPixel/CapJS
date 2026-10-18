@@ -9,7 +9,7 @@ const SHORTCUTS = [
   ['Alt+Down, Alt+Enter', 'Restart'],
   ['Alt+Right', 'Single step'],
   ['Ctrl+S', 'Save'],
-  ['Ctrl+Space', 'Word completion'],
+  ['Ctrl+Space', 'Suggestions for this program type (try it after x. in a dweet)'],
   ['Ctrl+F', 'Search'],
 ]
 
