@@ -105,10 +105,12 @@ export function createCanvasPanel({ session, settings, saveSettings, kv = null }
   host.addEventListener('dragleave', () => host.classList.remove('drop-target'))
   host.addEventListener('drop', e => {
     endDrag()
-    const file = [...(e.dataTransfer?.files ?? [])].find(f => f.type.startsWith('image/'))
-    if (!file) return
+    if (!isFileDrag(e)) return
     e.preventDefault()
-    loadImage(file)
+    const files = [...(e.dataTransfer?.files ?? [])]
+    const file = files.find(f => f.type.startsWith('image/'))
+    if (file) loadImage(file)
+    else alert(`${files[0]?.name || 'That file'} isn't an image. Drop an image here to use it as the custom image; drop code files on the library sidebar.`)
   })
 
   // --- Safe start ---

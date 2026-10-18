@@ -5,6 +5,7 @@ import { createRuntime } from './runtime.js'
 import { CANVAS_MODES, errorInfo, makeReply, transferList } from './protocol.js'
 import { wrapLoops, wrapHtmlScripts } from '../code/loopProtect.js'
 import { parseErrorLine } from '../code/errors.js'
+import { blockUnhandledFileDrops } from '../ui/dropGuard.js'
 import littlejsUrl from 'littlejsengine/dist/littlejs.js?url'
 
 const JS_BUDGET_MS = 2000
@@ -280,6 +281,7 @@ function onMessage(event) {
 function installListeners() {
   window.addEventListener('message', onMessage)
   window.addEventListener('error', onWindowError)
+  blockUnhandledFileDrops(window) // a drop inside the frame must never navigate it to the file
 }
 
 document.documentElement.style.height = '100%'

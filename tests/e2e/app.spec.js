@@ -158,3 +158,28 @@ test('Enter inserts a plain newline with no automatic indentation', async ({ pag
   await page.keyboard.press('Enter'); await page.keyboard.insertText('b')
   await expect.poll(() => page.evaluate(() => capjsDebug.session.code)).toBe('if(t){\na}\nb')
 })
+test('a file dropped anywhere is never opened by the browser', async ({ page }) => {
+  const results = await page.evaluate(async () => {
+    const cv = new OffscreenCanvas(4, 4); cv.getContext('2d').fillRect(0, 0, 4, 4)
+    const png = new File([await cv.convertToBlob()], 'dot.png', { type: 'image/png' })
+    const txt = new File(['x.fillRect(0,0,9,9)'], 'dweet.txt', { type: 'text/plain' })
+    // dispatchEvent returns false when a handler cancelled the browser's default (opening the file)
+    const drop = (selector, file) => {
+      const dt = new DataTransfer(); dt.items.add(file)
+      const r = document.querySelector(selector).getBoundingClientRect()
+      const fire = (target, type) => target.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt }))
+      fire(document.querySelector(selector), 'dragenter')
+      const target = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)
+      return { over: !fire(target, 'dragover'), drop: !fire(target, 'drop') }
+    }
+    return {
+      canvasImage: drop('#canvas-host', png),
+      canvasText: drop('#canvas-host', txt),
+      transport: drop('#transport', png),
+      capturePanel: drop('#btn-capture', txt),
+    }
+  })
+  for (const [where, r] of Object.entries(results)) expect(r, where).toEqual({ over: true, drop: true })
+  await expect(page.locator('#image-name')).toHaveText('dot.png')
+  await expect(page.locator('#drop-overlay')).toBeHidden()
+})

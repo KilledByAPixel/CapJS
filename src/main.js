@@ -8,6 +8,7 @@ import { createEditor } from './ui/editor.js'
 import { createTopbar } from './ui/topbar.js'
 import { createTransport, installGlobalKeys } from './ui/transport.js'
 import { createCanvasPanel } from './ui/canvasPanel.js'
+import { blockUnhandledFileDrops } from './ui/dropGuard.js'
 import { createStatusBar } from './ui/statusBar.js'
 import { createErrorBar } from './ui/errorBar.js'
 import { buildShareUrl, parseShareUrl } from './code/share.js'
@@ -59,6 +60,7 @@ async function boot() {
   const transport = createTransport({ session })
   createCapturePanel({ session, settings, saveSettings, transport, preview: createGifPreview() })
   canvasPanel = createCanvasPanel({ session, settings, saveSettings, kv: lib })
+  blockUnhandledFileDrops()
   createStatusBar({ session, editor })
   createErrorBar({ session, errorEl: $('error-bar'), consoleEl: $('console-bar') })
   installGlobalKeys(keys)
