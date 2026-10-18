@@ -129,8 +129,12 @@ export function createEditor(parent, { theme = 'capjs', fontSize = 2, onChange =
       language = languageKey(mode)
       view.dispatch({ effects: languageConf.reconfigure(LANGUAGES[language]()) })
     },
+    // Highlights the error line and scrolls it into view (null clears it).
     markError(line) {
-      view.dispatch({ effects: setErrorLine.of(line ?? null) })
+      const effects = [setErrorLine.of(line ?? null)]
+      if (line >= 1 && line <= view.state.doc.lines)
+        effects.push(EditorView.scrollIntoView(view.state.doc.line(line).from, { y: 'nearest' }))
+      view.dispatch({ effects })
     },
     focus: () => view.focus(),
   }

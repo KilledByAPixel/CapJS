@@ -4,7 +4,7 @@
 import { createRuntime } from './runtime.js'
 import { CANVAS_MODES, errorInfo, makeReply, transferList } from './protocol.js'
 import { wrapLoops, wrapHtmlScripts } from '../code/loopProtect.js'
-import { parseErrorLine } from '../code/errors.js'
+import { parseErrorLine, describeError, DWEET_LINE_OFFSET } from '../code/errors.js'
 import { blockUnhandledFileDrops } from '../ui/dropGuard.js'
 import littlejsUrl from 'littlejsengine/dist/littlejs.js?url'
 
@@ -86,8 +86,46 @@ function reportError(error) {
   else post({ type: 'error', error })
 }
 
+// Lines the user's code is shifted by in stacks: canvas modes run it in the runtime's Function wrapper.
+const stackOffset = () => CANVAS_MODES.includes(mode) ? DWEET_LINE_OFFSET : 0
+
 function onWindowError(event) {
-  reportError(errorInfo(event.error?.message ?? event.message, errorLine(event)))
+  const error = event.error ?? event.message
+  if (mode === 'html' || mode === 'littlejs') {
+    // Classic scripts: the event carries the line; its column is ours when the loop guard threw.
+    const line = errorLine(event)
+    const column = line && event.filename !== import.meta.url ? event.colno : null
+    reportError(describeError(error, { line, column, offset: 0 }))
+  } else {
+    reportError(describeError(error, { offset: stackOffset() }))
+  }
+}
+
+// Where in the user's inline script a stack points: the first frame outside this file.
+function scriptLocation(stack) {
+  for (const frame of String(stack ?? '').split('\n').slice(1)) {
+    if (frame.includes(import.meta.url)) continue
+    const m = /:(\d+):(\d+)\)?\s*$/.exec(frame)
+    if (!m || !frame.includes(location.href.split('?')[0])) return null
+    return { line: mode === 'html' ? htmlLine(+m[1]) : +m[1], column: +m[2] }
+  }
+  return null
+}
+
+// A failed console.assert reports as an error at the user's line, like the LittleJS examples.
+const nativeAssert = console.assert
+console.assert = function (ok, ...args) {
+  if (!ok) {
+    const e = new Error(['Assertion failed', ...args].join(args.length ? ': ' : ''))
+    const at = mode === 'html' || mode === 'littlejs' ? scriptLocation(e.stack) : null
+    reportError(describeError(e, { offset: stackOffset(), line: at?.line ?? null, column: at?.column ?? null }))
+  }
+  return nativeAssert.call(console, ok, ...args)
+}
+
+function onUnhandledRejection(event) {
+  event.preventDefault()
+  reportError(describeError(event.reason, { offset: stackOffset() }))
 }
 
 // --- Modes ---
@@ -137,7 +175,7 @@ function loadJs(msg) {
   try {
     indirectEval(msg.loopProtect ? wrapLoops(msg.code) : msg.code)
   } catch (e) {
-    error = errorInfo(e?.message ?? e, parseErrorLine(e?.stack, 0))
+    error = describeError(e, { offset: 0, code: msg.code })
   } finally {
     console.log = log
   }
@@ -172,7 +210,7 @@ async function loadLittlejs(msg) {
     await injectScript({ text: msg.loopProtect ? wrapLoops(msg.code) : msg.code })
     if (!errors.length) startEngine()
   } catch (e) {
-    errors.push(errorInfo(e?.message ?? e, parseErrorLine(e?.stack, 0)))
+    errors.push(describeError(e, { offset: 0 }))
   } finally {
     collecting = null
   }
@@ -195,7 +233,7 @@ function startEngine() {
     userFunction('gameUpdatePost') ?? noop,
     userFunction('gameRender') ?? noop,
     () => { renderPost(); serviceGrabs() },
-  ).catch(e => reportError(errorInfo(e?.message ?? e, parseErrorLine(e?.stack, 0))))
+  ).catch(e => reportError(describeError(e, { offset: 0 })))
 }
 
 // Runs inside a LittleJS render: it has no preserveDrawingBuffer, so the WebGL
@@ -281,6 +319,7 @@ function onMessage(event) {
 function installListeners() {
   window.addEventListener('message', onMessage)
   window.addEventListener('error', onWindowError)
+  window.addEventListener('unhandledrejection', onUnhandledRejection)
   blockUnhandledFileDrops(window) // a drop inside the frame must never navigate it to the file
 }
 

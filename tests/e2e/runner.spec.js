@@ -66,7 +66,7 @@ test('html top-level error is reported through onAsyncError with its line', asyn
     const out = await r.load('<body>\n<h1>hi</h1>\n<script>\nnope()\n</script>', { loopProtect: false })
     return { load: out.error, async: await got }
   })
-  expect(err).toEqual({ load: null, async: { message: 'nope is not defined', line: 4 } })
+  expect(err).toEqual({ load: null, async: { message: 'ReferenceError: nope is not defined', line: 4, column: 1, stack: [] } })
 })
 
 test('littlejs grab is non-blank, from grab() and from runFrames', async ({ page }) => {

@@ -403,17 +403,35 @@ button.share { background: #ff8; }
 }
 #editor .cm-editor { height: 100%; }
 #editor .cm-scroller { font-family: "Courier New", monospace; line-height: 1.4; }
-#editor .cm-errorLine { background: #c4241240; }
+#editor .cm-errorLine { background-color: #f004; }
 
-#error-bar, #console-bar {
+/* The error box reads as part of the editor, as in the LittleJS examples: flush under the
+   code (cancelling the column gap), monospace, red on near black. */
+#error-bar {
+  margin-top: -6px;
+  max-height: 30%;
+  overflow: auto;
+  white-space: pre-wrap;
+  padding: 6px 8px;
+  border: 2px solid #000;
+  border-top: 1px solid #333;
+  font: 12px/1.4 ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+  color: #ff5c7a;
+  background: #141416;
+}
+#error-bar .error-frame { color: #c78a96; padding-left: 2ch; }
+#error-bar .error-hint { color: #e6db74; margin-top: 4px; }
+#error-bar .error-hint::before { content: 'Hint: '; color: #888; }
+#console-bar {
   max-height: 8em;
   overflow: auto;
   white-space: pre-wrap;
   padding: 4px 8px;
   border-radius: 3px;
+  background: #111;
+  color: #bbb;
+  border: 1px solid var(--line);
 }
-#error-bar { background: #400; color: #f66; border: 1px solid #c42412; }
-#console-bar { background: #111; color: #bbb; border: 1px solid var(--line); }
 
 .status {
   display: flex;

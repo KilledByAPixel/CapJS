@@ -39,3 +39,15 @@ test('setCode keeps globals from earlier frames', async () => {
   await rt.handle({ type: 'frames', id: 4, frames: [2], budgetMs: 100, grab: false })
   expect(scope.k).toBe(12)
 })
+test('a syntax error is located at its editor line and column, even with loop protection', async () => {
+  const { loaded } = await setup('for(i=9;i--;)x.fillRect(i,0,9,9)\ny=)', { loopProtect: true })
+  expect(loaded.error).toMatchObject({ line: 2, column: 3 })
+  expect(loaded.error.message).toMatch(/^SyntaxError: /)
+})
+test('a failed console.assert reports an error at the user line, once', async () => {
+  const { rt } = await setup('x.fillRect(0,0,1,1)\nconsole.assert(frame>1, "frame too small")')
+  const r = await rt.handle({ type: 'frames', id: 2, frames: [0], budgetMs: 100, grab: false })
+  expect(r.error).toMatchObject({ message: 'Assertion failed: frame too small', line: 2 })
+  const ok = await rt.handle({ type: 'frames', id: 3, frames: [5], budgetMs: 100, grab: false })
+  expect(ok.error).toBeNull()
+})

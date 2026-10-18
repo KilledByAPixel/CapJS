@@ -2,7 +2,7 @@
 // (OffscreenCanvas, globalScope = self) and frame.js (DOM canvas, globalScope = window).
 
 import { wrapLoops } from '../code/loopProtect.js'
-import { parseErrorLine } from '../code/errors.js'
+import { describeError } from '../code/errors.js'
 import { errorInfo, makeReply } from './protocol.js'
 
 // Shadertoy wrapper, ported from the original CapJS's SetShader. The header spans 2 lines,
@@ -39,7 +39,7 @@ export function createRuntime({ canvas, globalScope, now = () => performance.now
     if ((++guardCalls & LOOP_CHECK_MASK) === 0 && now() > deadline) throw Error('Loop timed out')
   }
 
-  const toError = e => errorInfo(e?.message ?? e, parseErrorLine(e?.stack))
+  const toError = e => describeError(e)
 
   function clearUserGlobals() {
     for (const k of Object.getOwnPropertyNames(globalScope)) {
@@ -76,7 +76,7 @@ export function createRuntime({ canvas, globalScope, now = () => performance.now
     try {
       u = new Function('t', body)
     } catch (e) {
-      compileError = toError(e)
+      compileError = describeError(e, { code }) // the original code, so the location is the editor's
     }
     return compileError
   }
@@ -262,8 +262,13 @@ export function createRuntime({ canvas, globalScope, now = () => performance.now
   async function run(msg) {
     const lines = []
     const con = globalScope.console
-    const log = con.log
+    const { log, assert } = con
     con.log = (...args) => { lines.push(args.join(' ')) }
+    // A failed console.assert reports as an error at the user's line (its stack holds that frame).
+    let assertError = null
+    con.assert = (ok, ...args) => {
+      if (!ok) assertError ??= describeError(new Error(['Assertion failed', ...args].join(args.length ? ': ' : '')))
+    }
     let result
     try {
       const handler = handlers[msg.type]
@@ -273,7 +278,9 @@ export function createRuntime({ canvas, globalScope, now = () => performance.now
       result = { error: toError(e) }
     } finally {
       con.log = log
+      con.assert = assert
     }
+    if (!result?.error && assertError) result = { ...result, error: assertError }
     return makeReply(msg.id, { ...result, console: lines.join('\n') })
   }
 

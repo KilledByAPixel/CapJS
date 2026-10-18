@@ -12,3 +12,51 @@ test('offset is a parameter; result below 1 is null', () => {
   expect(parseErrorLine(s, 2)).toBe(2)
   expect(parseErrorLine(s, 4)).toBeNull()
 })
+
+import { describeError, locateSyntaxError, errorHint, formatError } from '../../src/code/errors.js'
+const thrown = (body, ...args) => { try { new Function('t', body)(...args) } catch (e) { return e } }
+
+test('describeError names the error and gives editor line and column', () => {
+  const e = describeError(thrown('a=1\nb=2\n  nope()'))
+  expect(e).toMatchObject({ message: 'ReferenceError: nope is not defined', line: 3, column: 3 })
+  expect(e.stack).toEqual([]) // one frame only: nothing extra to show
+  expect(describeError(new Error('Loop timed out')).message).toBe('Loop timed out')
+  expect(describeError('boom')).toMatchObject({ message: 'boom', line: null, column: null })
+})
+test('describeError lists the chain of user-code frames when there is more than one', () => {
+  const e = describeError(thrown('function draw(){\n  nope()\n}\ndraw()'))
+  expect(e).toMatchObject({ line: 2, column: 3 })
+  expect(e.stack).toEqual([{ fn: 'draw', line: 2, column: 3 }, { fn: null, line: 4, column: 1 }])
+})
+test('explicit line and column (from window.onerror) win, and offset 0 maps eval code', () => {
+  expect(describeError(new TypeError('x'), { line: 7, column: 4 })).toMatchObject({ message: 'TypeError: x', line: 7, column: 4 })
+})
+test('syntax errors are located by parsing the original code', () => {
+  const code = 'x.fillRect(0,0,9,9)\ny=)'
+  const e = describeError(thrown(code), { code })
+  expect(e.message).toMatch(/^SyntaxError: /)
+  expect(e).toMatchObject({ line: 2, column: 3 })
+  expect(locateSyntaxError('a=(\n')).toMatchObject({ line: 2, column: 1 })
+  expect(locateSyntaxError('return 1')).toBeNull() // dweet bodies may return
+  expect(locateSyntaxError('x=1')).toBeNull()
+})
+test('hints for common errors', () => {
+  expect(errorHint('ReferenceError: nope is not defined')).toMatch(/spelling/)
+  expect(errorHint('SyntaxError: Unexpected end of input')).toMatch(/\)|\}/)
+  expect(errorHint("TypeError: Cannot read properties of undefined (reading 'x')")).toMatch(/hasn't been set/)
+  expect(errorHint('TypeError: f is not a function')).toMatch(/function/)
+  expect(errorHint('Loop timed out')).toMatch(/never end/)
+  expect(errorHint('Stopped: a frame took longer than 1500 ms (infinite loop?)')).toMatch(/never end/)
+  expect(errorHint('Error: something custom')).toBeNull()
+})
+test('formatError gives the head, the frames to show and the hint', () => {
+  expect(formatError({ message: 'ReferenceError: nope is not defined', line: 2, column: 1, stack: [] })).toEqual({
+    head: 'ReferenceError: nope is not defined (Line:2, Column:1)',
+    frames: [],
+    hint: 'Check the spelling, or set it before using it.',
+  })
+  expect(formatError({ message: 'Error: x', line: 2, column: null, stack: [{ fn: 'draw', line: 2, column: 3 }, { fn: null, line: 4, column: 1 }] }))
+    .toEqual({ head: 'Error: x (Line:2)', frames: ['at draw (Line:2, Column:3)', 'at Line:4, Column:1'], hint: null })
+  expect(formatError({ message: 'Loop timed out', line: null })).toMatchObject({ head: 'Loop timed out', frames: [] })
+  expect(formatError(null)).toBeNull()
+})

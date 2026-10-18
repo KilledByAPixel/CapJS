@@ -3,8 +3,15 @@
 
 import { createRuntime } from './runtime.js'
 import { errorInfo, makeReply, transferList } from './protocol.js'
+import { describeError } from '../code/errors.js'
 
 let runtime = null
+
+// Errors outside any request (a rejected promise in user code) go to the page as async errors.
+self.addEventListener('unhandledrejection', e => {
+  e.preventDefault()
+  postMessage({ type: 'error', error: describeError(e.reason) })
+})
 
 self.onmessage = async ({ data: msg }) => {
   let reply

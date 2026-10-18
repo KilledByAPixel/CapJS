@@ -49,7 +49,13 @@ export function createSession({ container, editor, clock, settings, library = nu
 
   // --- State ---
 
+  // The first error stays until the code changes or the program restarts (setError(null)):
+  // later errors are usually its consequences. Any error still pauses the program.
   function setError(e) {
+    if (e && error) {
+      clock.playing = false
+      return
+    }
     error = e ?? null
     editor.markError(error?.line ?? null)
     pausedByError = !!error
@@ -172,10 +178,9 @@ export function createSession({ container, editor, clock, settings, library = nu
     clock.reset()
     lastStep = -1
     consoleText = ''
-    // Without time (html, js, littlejs) the old error goes now: errors raised while
-    // the page loads arrive as async errors before the load replies, and must stay.
-    // With time, the next successful frame clears it.
-    if (!r.supportsTime) setError(null)
+    // The old error goes before the load starts: errors raised while a page loads
+    // arrive as async errors before the load replies, and must stay.
+    setError(null)
     // Play is the intent from the moment the load starts, so a pause or step pressed
     // while it loads sticks instead of being overridden when the load finishes.
     clock.playing = r.supportsTime
@@ -199,7 +204,6 @@ export function createSession({ container, editor, clock, settings, library = nu
     lastStep = steps.at(-1)
     addConsole(result.console)
     if (result.error) setError(result.error)
-    else if (error) setError(null)
     emitState()
   }
 
@@ -208,6 +212,7 @@ export function createSession({ container, editor, clock, settings, library = nu
     flushDraft() // stored before the code runs, in case it hangs the page
     const gen = generation, r = runner
     const wasPausedByError = pausedByError
+    setError(null) // new code: the old error no longer applies
     const token = busy = {}
     const result = await r.setCode(code)
     if (busy === token) busy = null

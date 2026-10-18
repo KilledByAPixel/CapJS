@@ -138,7 +138,7 @@ export function createRunner({ container, mode, runMode, width, height, backgrou
     newCanvas()
     const offscreen = canvas.transferControlToOffscreen()
     worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' })
-    worker.onmessage = e => onReply(e.data)
+    worker.onmessage = e => e.data?.type === 'error' ? reportAsync(e.data.error) : onReply(e.data)
     worker.onerror = e => { e.preventDefault(); reportAsync(errorInfo(e.message || 'Worker error')) }
     dead = false
     deadError = null
