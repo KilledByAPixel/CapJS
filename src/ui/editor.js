@@ -36,13 +36,20 @@ const errorLineField = StateField.define({
   provide: f => EditorView.decorations.from(f),
 })
 
-// Pasting a compressed dweet into an empty editor inserts it uncompressed.
+// A paste that starts at the very beginning (into an empty editor, or over all the code)
+// and leaves a compressed dweet in the editor is turned into the uncompressed code, as in
+// the original CapJS. A paste anywhere else is left as pasted.
 const uncompressPaste = EditorState.transactionFilter.of(tr => {
-  if (!tr.isUserEvent('input.paste') || tr.startState.doc.length) return tr
+  if (!tr.isUserEvent('input.paste')) return tr
+  let start = Infinity
+  tr.changes.iterChangedRanges(fromA => { start = Math.min(start, fromA) })
   const text = tr.newDoc.toString()
-  if (!isCompressed(text)) return tr
+  if (start !== 0 || !isCompressed(text)) return tr
   const code = uncompress(text)
-  return { changes: { from: 0, insert: code }, selection: { anchor: code.length }, userEvent: 'input.paste', scrollIntoView: true }
+  return {
+    changes: { from: 0, to: tr.startState.doc.length, insert: code },
+    selection: { anchor: code.length }, userEvent: 'input.paste', scrollIntoView: true,
+  }
 })
 
 const LANGUAGES = { html, cpp, javascript }

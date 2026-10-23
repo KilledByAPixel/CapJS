@@ -234,3 +234,15 @@ test('before the code and styles load, the page is dark with the layout hidden (
   }))
   expect(look).toEqual({ bg: 'rgb(34, 34, 34)', app: 'hidden' })
 })
+test('pasting a compressed dweet over selected code uncompresses it; pasting mid-code does not', async ({ page }) => {
+  const compressed = await page.evaluate(async () => (await import('/CapJS/src/code/dwitter.js')).compress('x.fillRect(0,0,9,9)'))
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+  await page.evaluate(t => navigator.clipboard.writeText(t), compressed)
+  const code = () => page.evaluate(() => capjsDebug.session.code)
+  await typeCode(page, 'old code here')
+  await page.keyboard.press('Control+A'); await page.keyboard.press('Control+V') // select all, paste over it
+  await expect.poll(code).toBe('x.fillRect(0,0,9,9);')
+  await typeCode(page, 'a=1;')
+  await page.keyboard.press('End'); await page.keyboard.press('Control+V') // pasted after other code
+  await expect.poll(code).toBe('a=1;' + compressed)
+})
