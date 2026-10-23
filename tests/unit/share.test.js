@@ -19,3 +19,9 @@ test('no share params, or a damaged one, gives null', async () => {
   expect(await parseShareUrl('https://a/')).toBeNull()
   expect(await parseShareUrl('https://a/?s=not-a-real-payload')).toBeNull()
 })
+test('a plain ?code= link (for tools like the Dweetabase) opens its code, name and mode', async () => {
+  expect(await parseShareUrl('https://a/?filename=Dweet_123&code=' + encodeURIComponent('x.fillRect(0,0,9,9)\n//ü')))
+    .toEqual({ name: 'Dweet_123', mode: null, code: 'x.fillRect(0,0,9,9)\n//ü' })
+  expect(await parseShareUrl('https://a/?code=void%20mainImage&mode=shadertoy'))
+    .toEqual({ name: null, mode: 'shadertoy', code: 'void mainImage' })
+})

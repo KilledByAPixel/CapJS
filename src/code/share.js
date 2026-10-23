@@ -21,8 +21,11 @@ export async function buildShareUrl(baseHref, { name, mode, code }) {
 }
 
 // {name, mode, code}, with mode null for auto; null when the URL holds no program or a damaged one.
+// Besides Share links (?s=), a plain ?code=…&filename=…&mode=… opens readable code: the simple
+// way for other tools (the Dweetabase's CapJS button) to open a program here.
 export async function parseShareUrl(href) {
   const params = new URL(href).searchParams
+  if (params.has('code')) return { name: params.get('filename'), mode: params.get('mode'), code: params.get('code') }
   if (!params.has('s')) return null
   try {
     const json = new TextDecoder().decode(await pipe(fromBase64Url(params.get('s')), new DecompressionStream('deflate-raw')))

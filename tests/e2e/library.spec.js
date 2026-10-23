@@ -164,3 +164,10 @@ test('a Share link opens the same program as a new creation', async ({ page }) =
   expect(await page.evaluate(() => capjsDebug.session.code)).toBe('x.fillRect(0,0,99,99)//shared')
   expect(new URL(page.url()).search).toBe('') // the link's params are cleared after opening
 })
+test('a Dweetabase-style ?filename=&code= link opens the code as a named creation', async ({ page }) => {
+  const dweet = 'c.width|=0\nx.fillRect(0,0,9,9)'
+  await page.goto('./?filename=Dweet_123&code=' + encodeURIComponent(dweet)); await page.waitForFunction(() => window.capjsDebug)
+  expect(await page.evaluate(() => capjsDebug.session.code)).toBe(dweet)
+  await expect(page.locator('.lib-item', { hasText: 'Dweet_123' })).toBeVisible()
+  expect(new URL(page.url()).search).toBe('')
+})
