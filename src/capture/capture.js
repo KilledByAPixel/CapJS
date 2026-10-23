@@ -5,7 +5,7 @@
 
 import { createRunner, CAPTURE_BUDGET_MS } from '../runner/runner.js'
 import { composeFrame } from './aspect.js'
-import { captureTargets, effectiveFps, estimateCaptureBytes, MAX_CAPTURE_BYTES, GIF_SIZE_LIMIT } from './schedule.js'
+import { captureTargets, estimateCaptureBytes, MAX_CAPTURE_BYTES, GIF_SIZE_LIMIT } from './schedule.js'
 import { encodeWebm } from './webm.js'
 
 const backgroundOf = creationSettings => creationSettings.background?.enabled ? creationSettings.background.color : null
@@ -40,11 +40,10 @@ function encodeGifInWorker(frames, { width, height, fps, dither, onProgress, sig
 // reports 'capture' then 'encode'. Rejects with a user-facing message on failure.
 export async function runCapture({ session, settings: capture, creationSettings, onProgress, signal }) {
   if (!session.getRunner()?.supportsCapture) throw refusal(`Capture is not available in ${session.concreteMode} mode.`)
-  const { format, width, height, seconds, speed, dither, aspect } = capture
-  const fps = effectiveFps(format, capture.fps)
+  const { format, width, height, seconds, speed, dither, aspect, fps } = capture
   const bytes = estimateCaptureBytes({ width, height, seconds, fps })
   if (bytes > MAX_CAPTURE_BYTES) {
-    throw refusal(`This capture needs about ${(bytes / 1e9).toFixed(1)} GB of memory. Try a smaller size, fewer seconds, or 30 fps.`)
+    throw refusal(`This capture needs about ${(bytes / 1e9).toFixed(1)} GB of memory. Try a smaller size, fewer seconds, or a lower FPS.`)
   }
 
   session.suspendLive(true)

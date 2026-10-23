@@ -385,6 +385,11 @@ export function createSession({ container, editor, clock, settings, library = nu
     // Capture suspends the live view while it runs its own runner: code changes,
     // steps and seeks leave the live runner alone, and a restart asked for meanwhile
     // runs once on resume.
+    // Steps per screen frame for live playback: 2 runs the same steps twice as fast.
+    setSpeed(speed) {
+      clock.speed = speed
+    },
+
     suspendLive(on) {
       suspended = !!on
       if (!suspended && restartPending) {

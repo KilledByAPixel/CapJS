@@ -7,7 +7,7 @@ const setCap = async (page, o) => { for (const [k, v] of Object.entries(o)) awai
 
 test('GIF capture: preview, size, single palette, right frame count, unaffected by typing', async ({ page }) => {
   await setCap(page, { width: 320, height: 180, seconds: 1 })
-  await page.selectOption('#cap-fps', '30')
+  await page.locator('#cap-fps').fill('30')
   await page.click('#btn-capture')
   await page.click('#editor .cm-content'); await page.keyboard.insertText('//typing during capture')
   await expect(page.locator('#gif-preview')).toBeVisible({ timeout: 30000 })
@@ -37,7 +37,7 @@ test('edits during a capture wait for it, then restart the live view once', asyn
   await typeCode('for(e=performance.now();performance.now()-e<30;);x.fillRect(0,0,99,99)') // slow frames: a long capture
   await expect.poll(() => page.evaluate(() => capjsDebug.session.state.step)).toBeGreaterThan(0)
   await setCap(page, { width: 320, height: 180, seconds: 2 })
-  await page.selectOption('#cap-fps', '30')
+  await page.locator('#cap-fps').fill('30')
   await page.click('#btn-capture')
   await expect(page.locator('#btn-capture')).toContainText('Cancel')
   const step = await page.evaluate(() => capjsDebug.session.state.step)
@@ -72,7 +72,7 @@ test('a capture is named after the creation open when it started', async ({ page
   await page.keyboard.insertText('for(e=performance.now();performance.now()-e<30;);x.fillRect(0,0,99,99)')
   const name = await page.evaluate(() => capjsDebug.session.creation.name)
   await setCap(page, { width: 320, height: 180, seconds: 2 })
-  await page.selectOption('#cap-fps', '30')
+  await page.locator('#cap-fps').fill('30')
   await page.click('#btn-capture')
   await expect(page.locator('#btn-capture')).toContainText('Cancel')
   await page.click('#btn-fork') // opens "<name> fork" while capturing
@@ -83,4 +83,11 @@ test('a capture is named after the creation open when it started', async ({ page
 })
 test('the GIF size warning suggests no dithering', async ({ page }) => {
   expect(await page.locator('#gif-warning').textContent()).toContain('no dithering')
+})
+test('FPS is a typed number with no 50 fps note, kept after reload', async ({ page }) => {
+  await expect(page.locator('#cap-fps-hint')).toHaveCount(0)
+  await page.locator('#cap-fps').fill('12')
+  await page.locator('#cap-fps').press('Tab')
+  await page.reload(); await page.waitForFunction(() => window.capjsDebug)
+  await expect(page.locator('#cap-fps')).toHaveValue('12')
 })

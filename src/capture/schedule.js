@@ -1,11 +1,8 @@
 // Capture timing and limits: which program steps each captured frame shows, GIF
 // frame delays, and the memory estimate that refuses oversized captures up front.
 
-export const GIF_MAX_FPS = 50 // GIF delays are whole centiseconds; browsers slow anything under 2 cs
 export const MAX_CAPTURE_BYTES = 1.5e9
 export const GIF_SIZE_LIMIT = 15_000_000
-
-export const effectiveFps = (format, fps) => format === 'gif' ? Math.min(fps, GIF_MAX_FPS) : fps
 
 export const frameCount = (seconds, fps) => Math.round(seconds * fps)
 

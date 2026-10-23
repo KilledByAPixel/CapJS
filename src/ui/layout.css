@@ -305,7 +305,6 @@ button.capture {
 }
 #capture-panel .grid { margin-bottom: 8px; }
 #capture-panel select { max-width: 16ch; }
-#cap-fps-hint { font-size: 11px; }
 #capture-progress { display: block; width: 100%; margin-top: 6px; accent-color: var(--accent); }
 #capture-message { margin-top: 6px; color: #fc4; white-space: pre-wrap; }
 #capture-message:empty { display: none; }

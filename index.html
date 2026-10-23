@@ -113,13 +113,7 @@
             <span>Seconds</span>
             <input id="cap-seconds" type="number" min="0.1" max="600" step="0.5" value="2" title="Length of the capture in seconds">
             <span>FPS</span>
-            <span class="row">
-              <select id="cap-fps" title="Frames per second">
-                <option value="30">30</option>
-                <option value="60">60</option>
-              </select>
-              <span id="cap-fps-hint" class="dim" hidden>GIFs play at 50 fps max</span>
-            </span>
+            <input id="cap-fps" type="number" min="1" max="120" step="1" value="60" title="Frames per second of the capture (GIF frame times are whole hundredths of a second)">
             <span class="cap-dither-row">Dither</span>
             <select id="cap-dither" class="cap-dither-row" title="Dithering hides color banding: error diffusion (smooth), ordered (patterned, smaller files) or none (flat colors, smallest files)">
               <option value="fs">error diffusion</option>

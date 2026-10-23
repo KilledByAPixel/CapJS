@@ -246,3 +246,10 @@ test('pasting a compressed dweet over selected code uncompresses it; pasting mid
   await page.keyboard.press('End'); await page.keyboard.press('Control+V') // pasted after other code
   await expect.poll(code).toBe('a=1;' + compressed)
 })
+test('Speed makes live playback run faster', async ({ page }) => {
+  await typeCode(page, 'x.fillRect(0,0,t,9)')
+  await page.locator('#cap-speed').fill('4'); await page.locator('#cap-speed').press('Tab')
+  await page.click('#btn-restart')
+  await page.waitForTimeout(1000)
+  expect(Number(await page.textContent('#time-display'))).toBeGreaterThan(1.5) // about 1.0 at speed 1
+})
