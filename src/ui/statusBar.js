@@ -1,4 +1,5 @@
-// Status row: character, line and byte counts, plus Compress, Minify and Beautify.
+// Status row: character, line and byte counts, the loop protection checkbox, plus
+// Compress, Minify and Beautify.
 
 import { compress, minify, beautify, countChars, countBytes } from '../code/dwitter.js'
 
@@ -35,4 +36,8 @@ export function createStatusBar({ session, editor }) {
     if (next !== session.code) editor.setCode(next)
   }
   for (const [btn, fn] of tools) btn.addEventListener('click', replace(fn))
+
+  const loopProtect = $('loop-protect')
+  loopProtect.addEventListener('change', () => session.setLoopProtect(loopProtect.checked))
+  session.on('state', s => { loopProtect.checked = s.loopProtect })
 }

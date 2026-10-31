@@ -253,3 +253,12 @@ test('Speed makes live playback run faster', async ({ page }) => {
   await page.waitForTimeout(1000)
   expect(Number(await page.textContent('#time-display'))).toBeGreaterThan(1.5) // about 1.0 at speed 1
 })
+test('turning loop protection off lets a very slow frame finish; New turns it back on', async ({ page }) => {
+  await expect(page.locator('#loop-protect')).toBeChecked()
+  await page.uncheck('#loop-protect')
+  await typeCode(page, 'for(e=performance.now();performance.now()-e<2500;);x.fillRect(0,0,1920,1080)')
+  await expect.poll(() => ink(page), { timeout: 10000 }).toBeGreaterThan(0.95)
+  await expect(page.locator('#error-bar')).toBeHidden()
+  await page.click('#btn-new'); await page.click('[data-template="dweet"]')
+  await expect(page.locator('#loop-protect')).toBeChecked()
+})

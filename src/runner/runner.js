@@ -36,6 +36,7 @@ export function createRunner({ container, mode, runMode, width, height, backgrou
   let worker = null, canvas = null, iframe = null
   let dead = false, deadError = null, destroyed = false
   let image = null
+  let watchdog = true // off: worker requests are waited for, however long they take
   let settleReady = null // settles the current frame's ready wait with {error}
   const pending = new Map() // id -> settle(reply)
   const asyncErrorFns = []
@@ -73,7 +74,7 @@ export function createRunner({ container, mode, runMode, width, height, backgrou
   if (!inWorker) window.addEventListener('message', onWindowMessage)
 
   // Sends one request and resolves with its reply. In worker mode a watchdog
-  // kills the worker if the reply doesn't arrive in time.
+  // kills the worker if the reply doesn't arrive in time (unless load turned it off).
   function send(msg, budgetMs, transfer = [], timeoutError = frameTimeout) {
     if (destroyed) return Promise.resolve({ error: destroyedError(), console: '' })
     const id = nextId++
@@ -87,7 +88,7 @@ export function createRunner({ container, mode, runMode, width, height, backgrou
       }
       let timer = null
       pending.set(id, reply => { clearTimeout(timer); resolve(reply) })
-      if (inWorker) {
+      if (inWorker && watchdog) {
         timer = setTimeout(() => {
           pending.delete(id)
           kill(timeoutError(budgetMs))
@@ -168,9 +169,12 @@ export function createRunner({ container, mode, runMode, width, height, backgrou
     return result
   }
 
-  function load(code, { loopProtect = false } = {}) {
+  // `loopProtect` makes loops stop themselves when a frame runs over its budget;
+  // `watchdog: false` lets worker requests run as long as they take, until the next load.
+  function load(code, { loopProtect = false, watchdog: guard = true } = {}) {
     return enqueue(async () => {
       if (destroyed) return { error: destroyedError() }
+      watchdog = guard
       const started = await (inWorker ? startWorker() : startFrame())
       if (started.error) return started
       if (image) {

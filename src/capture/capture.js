@@ -60,7 +60,7 @@ export async function runCapture({ session, settings: capture, creationSettings,
       width: creationSettings.canvasWidth, height: creationSettings.canvasHeight, background,
     })
     if (session.image) runner.setImage(session.image) // kept and sent after the load
-    const loaded = await runner.load(code, { loopProtect: runner.runMode === 'page' })
+    const loaded = await runner.load(code, session.loadOptions(runner.runMode))
     if (loaded.error) throw refusal(loaded.error.message)
 
     const canvas = document.createElement('canvas')

@@ -6,7 +6,7 @@
 // steps to the runner one request at a time (backpressure: no tick while busy).
 //
 // Events (session.on): 'state' {time, step, playing, error, console, supportsTime,
-// supportsCapture, safeStart}, 'codeChanged' {code, modified}, and 'renamed' {id, name}
+// supportsCapture, safeStart, loopProtect}, 'codeChanged' {code, modified}, and 'renamed' {id, name}
 // once a library rename has been stored.
 //
 // `ui.showSafeStart(bool)` shows or hides the "Click to run" overlay.
@@ -38,6 +38,7 @@ export function createSession({ container, editor, clock, settings, library = nu
   let error = null, consoleText = ''
   let pausedByError = false
   let safeStart = false
+  let loopProtect = true // stops hung programs; turned off by hand for very slow ones, back on at each open
   let suspended = false // a capture is running: nothing drives the live runner
   let restartPending = false // a restart asked for while suspended, run on resume
   let image = null
@@ -80,6 +81,7 @@ export function createSession({ container, editor, clock, settings, library = nu
     supportsTime: !!runner?.supportsTime,
     supportsCapture: !!runner?.supportsCapture,
     safeStart,
+    loopProtect,
   })
   const emitState = () => emit('state', state())
 
@@ -134,6 +136,9 @@ export function createSession({ container, editor, clock, settings, library = nu
 
   // --- Runner ---
 
+  // Protection is loop wrapping in page mode and the watchdog in worker mode.
+  const loadOptions = runMode => ({ loopProtect: loopProtect && runMode === 'page', watchdog: loopProtect })
+
   function destroyRunner() {
     runner?.destroy()
     runner = null
@@ -185,7 +190,7 @@ export function createSession({ container, editor, clock, settings, library = nu
     // while it loads sticks instead of being overridden when the load finishes.
     clock.playing = r.supportsTime
     emitState()
-    const result = await r.load(code, { loopProtect: r.runMode === 'page' })
+    const result = await r.load(code, loadOptions(r.runMode))
     if (busy === token) busy = null
     if (gen !== generation) return
     addConsole(result.console)
@@ -266,6 +271,7 @@ export function createSession({ container, editor, clock, settings, library = nu
     // is the working copy to restore. With `safeStart`, page-mode code waits for a click.
     open({ creation: c, version, draft = null, safeStart: safe = false }) {
       creation = { id: c.id ?? null, name: c.name ?? 'untitled' }
+      loopProtect = true
       saved = { code: version.code, mode: version.mode, runMode: version.runMode ?? 'auto', settings: clone(version.settings ?? DEFAULT_CREATION_SETTINGS) }
       cancelDraft()
       setWorkingCopy(draft ?? saved, { newHistory: true }) // undo never reaches the previous creation
@@ -382,6 +388,13 @@ export function createSession({ container, editor, clock, settings, library = nu
       return restart()
     },
 
+    // Turning loop protection off or on reloads the program with the new setting.
+    setLoopProtect(on) {
+      loopProtect = !!on
+      if (!safeStart) restart()
+      else emitState()
+    },
+
     // Capture suspends the live view while it runs its own runner: code changes,
     // steps and seeks leave the live runner alone, and a restart asked for meanwhile
     // runs once on resume.
@@ -399,6 +412,7 @@ export function createSession({ container, editor, clock, settings, library = nu
     },
 
     getRunner: () => runner,
+    loadOptions, // runner.load options for the current loop protection, given a run mode
 
     get code() { return code },
     get mode() { return work.mode },
@@ -410,6 +424,7 @@ export function createSession({ container, editor, clock, settings, library = nu
     get image() { return image }, // the custom image (an ImageBitmap) or null
     get modified() { return isModified() },
     get state() { return state() },
+    get loopProtect() { return loopProtect },
   }
   return session
 }
